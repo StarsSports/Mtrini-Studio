@@ -1,20 +1,11 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
-
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/a6dd4410-45db-4bd6-b8a3-a997dee20dac
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Welcome To Mtrini Studio
+1st Ever Moroccan AI/Coding AI 
+Models List :
+Mtrini 1.0
+Mtrini 1.1(bets still not realesed)
+Supports :
+Web Browser
+Windows 10
+Windows 11
+macOS Apple Silicon
+macOS Intel
