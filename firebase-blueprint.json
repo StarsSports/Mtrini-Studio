@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with credits and configurations",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "credits": { "type": "integer" },
+        "themeColor": { "type": "string" },
+        "mcpServer": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "credits", "createdAt"]
+    },
+    "Chat": {
+      "title": "Chat Thread",
+      "description": "A conversation thread owned by a user",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "userId", "createdAt", "updatedAt"]
+    },
+    "Message": {
+      "title": "Chat Message",
+      "description": "Individual message inside a chat thread",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "hasArtifact": { "type": "boolean" },
+        "artifactCode": { "type": "string" },
+        "artifactTitle": { "type": "string" },
+        "artifactType": { "type": "string" }
+      },
+      "required": ["role", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User account documents containing configuration and credit balances"
+    },
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Multi-turn chat threads"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Individual messages within a chat thread"
+    }
+  }
+}

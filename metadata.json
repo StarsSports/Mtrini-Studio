@@ -1,0 +1,6 @@
+{
+  "name": "Mtrini 1.0",
+  "description": "Premium Claude-style dual-workspace, powered by Mtrini Private Intelligence server-side. The first ever Moroccan AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
