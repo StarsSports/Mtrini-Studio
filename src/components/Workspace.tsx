@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Send, Terminal, Square, Award, Cpu, Loader2, Sparkles, Layers, ChevronDown, ChevronRight, HelpCircle, Brain, Info, Check, Coins, Lock, Gem, Laptop, Download
+  Send, Terminal, Square, Award, Cpu, Loader2, Sparkles, Layers, ChevronDown, ChevronRight, HelpCircle, Brain, Info, Check, Coins, Lock, Gem, Laptop, Download, Trash2
 } from 'lucide-react';
 import { Message, ThemeColors, UserProfile } from '../types';
 import ArtifactView from './ArtifactView';
 import { parseMessageArtifacts } from '../utils';
+import StreamingThinkingIndicator from './StreamingThinkingIndicator';
 
 interface WorkspaceProps {
   messages: Message[];
@@ -22,6 +23,7 @@ interface WorkspaceProps {
   onSelectModel: (model: 'mtrini_1_0' | 'mtrini_1_1') => void;
   selectedThinking: 'fast' | 'deep' | 'short';
   onSelectThinking: (style: 'fast' | 'deep' | 'short') => void;
+  onClearMessages?: () => void;
 }
 
 interface ParsedThought {
@@ -59,7 +61,8 @@ export default function Workspace({
   selectedModel,
   onSelectModel,
   selectedThinking,
-  onSelectThinking
+  onSelectThinking,
+  onClearMessages
 }: WorkspaceProps) {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -69,6 +72,7 @@ export default function Workspace({
 
   const [showMainLogs, setShowMainLogs] = useState(false);
   const [downloadingClient, setDownloadingClient] = useState(false);
+  const [isArtifactExpanded, setIsArtifactExpanded] = useState(false);
 
   const handleLocalDownload = () => {
     setDownloadingClient(true);
@@ -86,16 +90,11 @@ export default function Workspace({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streaming]);
 
+  // Clear active artifact view when changing chat threads
   useEffect(() => {
-    const assistantMsgsWithArtifact = messages.filter(
-      (m) => m.role === 'assistant' && m.content.includes('[ARTIFACT')
-    );
-    if (assistantMsgsWithArtifact.length > 0) {
-      setSelectedArtifactMessageId(assistantMsgsWithArtifact[assistantMsgsWithArtifact.length - 1].id);
-    } else {
-      setSelectedArtifactMessageId(null);
-    }
-  }, [messages]);
+    setSelectedArtifactMessageId(null);
+    setIsArtifactExpanded(false);
+  }, [activeChatId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,12 +112,24 @@ export default function Workspace({
   };
 
   const handleSelectModelWithGate = (modelId: 'mtrini_1_0' | 'mtrini_1_1') => {
-    if (modelId === 'mtrini_1_1' && !userProfile?.isPremiumActive) {
-      // Trigger Paywall directly
-      onOpenPremiumHub();
-    } else {
-      onSelectModel(modelId);
-    }
+    onSelectModel(modelId);
+  };
+
+  const handleExportMarkdown = () => {
+    if (messages.length === 0) return;
+    const markdownContent = messages.map((m) => {
+      const title = m.role === 'user' ? '### User Question' : '### Mtrini Response';
+      return `${title}\n\n${m.content}\n\n---\n`;
+    }).join('\n');
+    
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `mtrini_session_${activeChatId || 'export'}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const activeMessage = messages.find((m) => m.id === selectedArtifactMessageId);
@@ -128,37 +139,60 @@ export default function Workspace({
     <div className="flex-1 flex overflow-hidden bg-[#FAF8F5] font-sans h-full text-neutral-800">
       
       {/* Central Chat Stream */}
-      <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeArtifact ? 'max-w-[50%]' : 'w-full'} transition-all duration-300`}>
+      <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeArtifact ? (isArtifactExpanded ? 'max-w-0 opacity-0 pointer-events-none' : 'max-w-[55%] md:max-w-[50%]') : 'w-full'} transition-all duration-300`}>
         
         {/* Dynamic Studio Header Desk */}
         <div className="h-14 border-b border-[#E6DCD0] px-4 bg-[#FAF8F5] flex items-center justify-between shrink-0 select-none shadow-3xs z-10">
           <div className="flex items-center gap-2">
-            <Cpu className="w-4.5 h-4.5 text-[#C2410C]" />
+            <Cpu className={`w-4.5 h-4.5 ${themeColors.text}`} />
             <div className="flex flex-col">
               <span className="text-xs font-display font-extrabold tracking-tight uppercase text-neutral-900">
-                {selectedModel === 'mtrini_1_1' ? 'Mtrini 1.1 Pro' : 'Mtrini 1.0 Core'}
+                Mtrini Code Studio
               </span>
-              <span className="text-[10px] text-neutral-500 font-medium">Workspace Active</span>
+              <span className="text-[10px] text-neutral-500 font-medium font-sans">Workspace Active</span>
             </div>
           </div>
           
           <div className="flex items-center gap-2">
-            {/* Desktop Client Badge link button */}
+            {/* Clear Sandbox / Messages */}
+            {messages.length > 0 && onClearMessages && (
+              <button
+                type="button"
+                onClick={onClearMessages}
+                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-rose-50 border border-rose-250 hover:border-rose-450 text-rose-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs"
+                title="Reset this sandbox conversation"
+              >
+                <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-500" />
+                <span>Reset Sandbox</span>
+              </button>
+            )}
+
+            {/* Export conversation */}
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={handleExportMarkdown}
+                className={`flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#DEC9B3] ${themeColors.hoverBorder} hover:bg-neutral-50 text-neutral-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs`}
+                title="Export entire interview as markdown"
+              >
+                <Download className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+                <span>Export Session</span>
+              </button>
+            )}
+            
+             {/* Desktop companion apps trigger */}
             <button
               onClick={onOpenPremiumHub}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 border border-neutral-250 text-neutral-800 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs hover:-translate-y-0.5 active:translate-y-0 text-center select-none"
-              title="Mtrini Desktop App Hub"
-              id="header-wallet-btn"
+              className={`flex items-center gap-1.5 px-3 py-1.5 border border-[#DEC9B3] ${themeColors.hoverBorder} bg-[#FAF9F5]/80 hover:bg-white text-neutral-800 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs`}
+              title="Download standalone cross-platform desktop client"
             >
-              <Laptop className="w-3.5 h-3.5 text-neutral-600 shrink-0" />
-              <span>
-                Desktop Apps <strong className="font-mono">(Win / Mac)</strong>
-              </span>
+              <Laptop className={`w-3.5 h-3.5 ${themeColors.text} shrink-0`} />
+              <span>Desktop App</span>
             </button>
-            
+
             <button
               onClick={onOpenPreferences}
-              className="text-[11px] font-bold border border-[#DEC9B3] bg-white hover:bg-neutral-50 text-neutral-700 hover:text-neutral-950 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-3xs"
+              className={`text-[11px] font-bold border border-[#DEC9B3] ${themeColors.hoverBorder} bg-white hover:bg-neutral-50 text-neutral-700 hover:text-neutral-950 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-3xs`}
             >
               Control Desk
             </button>
@@ -168,11 +202,22 @@ export default function Workspace({
         {/* Message Feeds Container */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar bg-[#FAF8F5]">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center p-6 text-center select-none space-y-5 max-w-2xl mx-auto my-auto py-10" id="mtrini-welcome-dashboard">
-              <div className="space-y-2">
+            <motion.div 
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+              className="h-full flex flex-col items-center justify-center p-6 text-center select-none space-y-5 max-w-2xl mx-auto my-auto py-10" 
+              id="mtrini-welcome-dashboard"
+            >
+              <motion.div 
+                initial={{ scale: 0.96, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.08, duration: 0.25 }}
+                className="space-y-2"
+              >
                 <div className="flex justify-center">
                   <div className="p-3 rounded-2xl bg-white border border-[#DEC9B3] shadow-xs relative group">
-                    <Brain className="w-7 h-7 text-[#C2410C]" />
+                    <Brain className={`w-7 h-7 ${themeColors.text}`} />
                   </div>
                 </div>
 
@@ -184,12 +229,18 @@ export default function Workspace({
                     Integrated AI assistant and interactive code sandbox
                   </p>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Module: Code Generation Capabilities */}
-              <div className="w-full bg-white border border-[#E6DCD0] rounded-xl p-4.5 text-left space-y-3 shadow-3xs" id="capabilities-card">
+              <motion.div 
+                initial={{ y: 12, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.16, duration: 0.25 }}
+                className="w-full bg-white border border-[#E6DCD0] rounded-xl p-4.5 text-left space-y-3 shadow-3xs" 
+                id="capabilities-card"
+              >
                 <div className="flex items-center gap-2 text-xs font-bold text-neutral-900 uppercase tracking-wide">
-                  <Layers className="w-4 h-4 text-[#C2410C] shrink-0" />
+                  <Layers className={`w-4 h-4 ${themeColors.text} shrink-0`} />
                   Code Sandbox Capabilities
                 </div>
                 <p className="text-[11px] text-neutral-600 leading-relaxed font-sans">
@@ -198,53 +249,93 @@ export default function Workspace({
                 
                 <div className="space-y-2 pt-1">
                   <span className="text-[10px] uppercase font-bold text-neutral-400 block tracking-wider font-mono">Test code assistant (Click to populate workspace input):</span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                     <button
                       type="button"
-                      onClick={() => handleApplyPreset("Generate a fully interactive Starfield canvas simulator in HTML and CSS with particle physics and adjustable warp controls.")}
-                      className="p-2.5 border border-[#EDE8DE] rounded-lg bg-[#FAF9F5] hover:bg-[#FAF5ED] text-left hover:border-[#DEC9B3] transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-0.5"
+                      onClick={() => handleApplyPreset("Generate a fully interactive Starfield canvas simulator in HTML and CSS with particle physics, multiple stars speed tiers, and adjustable warp controls.")}
+                      className="p-3 border border-[#EDE8DE] rounded-xl bg-[#FAF9F5] hover:bg-white text-left hover:border-[#DEC9B3] transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
                     >
-                      <span className="font-bold text-neutral-950">1. Canvas Starfield Particle Physics</span>
-                      <span className="text-[9.5px] text-neutral-500 truncate w-full">Interactive visual simulation inside secondary frames.</span>
+                      <span className="font-bold text-neutral-950 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-700 animate-pulse" />
+                        1. Canvas Starfield Warp Simulator
+                      </span>
+                      <span className="text-[9.5px] text-neutral-500 leading-normal">High-performance custom particle graphics inside responsive containers.</span>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => handleApplyPreset("Write a robust event-driven Roblox Luau core server framework. Implement secure memory garbage collection streams and custom Dispatcher events.")}
-                      className="p-2.5 border border-[#EDE8DE] rounded-lg bg-[#FAF9F5] hover:bg-[#FAF5ED] text-left hover:border-[#DEC9B3] transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-0.5"
+                      className="p-3 border border-[#EDE8DE] rounded-xl bg-[#FAF9F5] hover:bg-white text-left hover:border-[#DEC9B3] transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
                     >
-                      <span className="font-bold text-neutral-950">2. Luau Server Dispatcher Module</span>
-                      <span className="text-[9.5px] text-neutral-500 truncate w-full">Optimized module for high fidelity event handling.</span>
+                      <span className="font-bold text-neutral-950 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+                        2. Roblox Luau Dispatcher Framework
+                      </span>
+                      <span className="text-[9.5px] text-neutral-500 leading-normal">Advanced garbage-collected custom Roblox backend architecture module.</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset("Build an elegant, fully responsive Stock Market Trading Simulator widget with interactive charts, mock symbols buy/sell logs, and dynamic filter tags.")}
+                      className="p-3 border border-[#EDE8DE] rounded-xl bg-[#FAF9F5] hover:bg-white text-left hover:border-[#DEC9B3] transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
+                    >
+                      <span className="font-bold text-neutral-950 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                        3. stock-trade-simulator.tsx
+                      </span>
+                      <span className="text-[9.5px] text-neutral-500 leading-normal">Elegant KPI scorecard panel containing beautiful sparkline plots.</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPreset("Create an elegant Algorithmic Sorting Visualizer using HTML Canvas for sorting algorithms (Bubble, Quick, Merge). Include speed slider and array size triggers.")}
+                      className="p-3 border border-[#EDE8DE] rounded-xl bg-[#FAF9F5] hover:bg-white text-left hover:border-[#DEC9B3] transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
+                    >
+                      <span className="font-bold text-neutral-950 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
+                        4. sorting-visualizer.js
+                      </span>
+                      <span className="text-[9.5px] text-neutral-500 leading-normal">Interactive educational simulator to observe algorithms sorting in real-time.</span>
                     </button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
-              {/* Module: Standalone Desktop Installer */}
-              <div className="w-full bg-white border border-[#E6DCD0] rounded-xl p-4.5 text-left shadow-3xs space-y-3" id="desktop-integration-card">
+              {/* Module: Desktop Application Companion */}
+              <motion.div
+                initial={{ y: 12, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.24, duration: 0.25 }}
+                className="w-full bg-white border border-[#E6DCD0] rounded-xl p-4.5 text-left space-y-3 shadow-3xs"
+                id="desktop-downloads-card"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-neutral-900 uppercase tracking-wide flex items-center gap-1.5">
-                    <Laptop className="w-4 h-4 text-neutral-600 shrink-0" />
-                    Mtrini Desktop Installer
+                    <Laptop className={`w-4 h-4 ${themeColors.text} shrink-0`} />
+                    Mtrini Desktop Clients
                   </span>
-                  <span className="text-[9px] font-mono text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-lg border border-neutral-200 font-semibold uppercase">
-                    Cross-Platform Targets
+                  <span className={`text-[9px] font-mono ${themeColors.text} bg-neutral-100 ${themeColors.bg} px-2 py-0.5 rounded-lg border ${themeColors.border} uppercase font-bold`}>
+                    v1.1.0 Build
                   </span>
                 </div>
-                
+
                 <p className="text-[11px] text-neutral-600 leading-relaxed font-sans">
-                  Execute code on isolated workspaces or synchronize local system workspaces using our native companion applications.
+                  Execute code on isolated workspace runtimes, and synchronize local directories securely using our cross-platform desktop companion apps.
                 </p>
 
-                <div className="pt-1 flex flex-wrap items-center gap-2 select-none">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 select-none">
                   <button
                     type="button"
                     onClick={() => {
                       window.location.href = '/api/download/mtrini?platform=windows';
                     }}
-                    className="py-1.5 px-3 bg-neutral-900 hover:bg-black text-white font-bold text-[10px] rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-3xs hover:-translate-y-0.5"
+                    className="p-3 border border-[#EDE8DE] hover:border-[#DEC9B3] rounded-lg bg-[#FAF9F5] hover:bg-white text-left transition-all cursor-pointer group flex items-center justify-between shadow-3xs"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    Windows (10/11)
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="font-bold text-neutral-900 text-xs">Windows x64</span>
+                      <span className="text-[9px] text-neutral-500 font-mono">10 / 11 Desktop</span>
+                    </div>
+                    <Download className="w-3.5 h-3.5 text-neutral-400 group-hover:text-neutral-900 shrink-0 ml-1 transition-colors" />
                   </button>
 
                   <button
@@ -252,10 +343,13 @@ export default function Workspace({
                     onClick={() => {
                       window.location.href = '/api/download/mtrini?platform=macos-silicon';
                     }}
-                    className="py-1.5 px-3 bg-neutral-900 hover:bg-black text-white font-bold text-[10px] rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-3xs hover:-translate-y-0.5"
+                    className="p-3 border border-[#EDE8DE] hover:border-[#DEC9B3] rounded-lg bg-[#FAF9F5] hover:bg-white text-left transition-all cursor-pointer group flex items-center justify-between shadow-3xs"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    macOS (M1/M2/M3/M4)
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="font-bold text-neutral-900 text-xs">macOS M1/M2/M3</span>
+                      <span className="text-[9px] text-neutral-500 font-mono">Apple Silicon</span>
+                    </div>
+                    <Download className="w-3.5 h-3.5 text-neutral-400 group-hover:text-neutral-900 shrink-0 ml-1 transition-colors" />
                   </button>
 
                   <button
@@ -263,59 +357,17 @@ export default function Workspace({
                     onClick={() => {
                       window.location.href = '/api/download/mtrini?platform=macos-intel';
                     }}
-                    className="py-1.5 px-3 bg-neutral-900 hover:bg-black text-white font-bold text-[10px] rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-3xs hover:-translate-y-0.5"
+                    className="p-3 border border-[#EDE8DE] hover:border-[#DEC9B3] rounded-lg bg-[#FAF9F5] hover:bg-white text-left transition-all cursor-pointer group flex items-center justify-between shadow-3xs"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    macOS (Intel)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowMainLogs(!showMainLogs)}
-                    className="py-1.5 px-2.5 border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-bold text-[10px] rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                    id="toggle-windows-logs-btn"
-                  >
-                    <Terminal className="w-3.5 h-3.5 text-neutral-500" />
-                    {showMainLogs ? 'Hide Log' : 'Show OS Log'}
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="font-bold text-neutral-900 text-xs">macOS Intel</span>
+                      <span className="text-[9px] text-neutral-500 font-mono">Legacy x64 App</span>
+                    </div>
+                    <Download className="w-3.5 h-3.5 text-neutral-400 group-hover:text-neutral-900 shrink-0 ml-1 transition-colors" />
                   </button>
                 </div>
-
-                {/* Collapsible Diagnostics window */}
-                <AnimatePresence>
-                  {showMainLogs && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden mt-1"
-                    >
-                      <div className="p-3 bg-neutral-900 text-neutral-300 font-mono text-[10px] rounded-lg border border-neutral-800 space-y-1 shadow-inner leading-normal">
-                        <div className="text-neutral-400 font-semibold border-b border-neutral-800 pb-1 mb-1 flex justify-between">
-                          <span>SYSTEM TARGET METADATA</span>
-                          <span className="text-emerald-400">ACTIVE</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Supported Windows:</span>
-                          <span className="text-neutral-100 font-bold">Microsoft Windows 10 & 11 (64-bit Editions)</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Supported macOS:</span>
-                          <span className="text-neutral-150">Sierra / Big Sur / Ventura / Sonoma / Sequoia</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Active Client Output:</span>
-                          <span className="text-neutral-100">Client Executable Bundle v1.1.0 Stable</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Download Mode:</span>
-                          <span className="text-emerald-400">Raw Binary Attachment Stream (/api/download/mtrini)</span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           ) : (
             /* Active Messages Feed */
             <div className="space-y-5 max-w-3xl mx-auto col">
@@ -351,12 +403,13 @@ export default function Workspace({
                       {!isUser && hasThought && (
                         <div className="mb-3.5 bg-[#FAF9F5] border border-[#E6DCD0] rounded-xl overflow-hidden shadow-3xs max-w-2xl">
                           <button
+                            type="button"
                             onClick={() => toggleThought(m.id)}
                             className="w-full flex items-center justify-between p-2.5 px-3 bg-[#EAE4D9]/60 text-neutral-800 hover:text-black transition-colors text-xs font-bold font-display uppercase tracking-wide"
                           >
                             <span className="flex items-center gap-1.5 text-neutral-800">
-                              <Brain className="w-3.5 h-3.5 text-[#C2410C]" />
-                              <span>Diagnostics Flow</span>
+                              <Brain className={`w-3.5 h-3.5 ${themeColors.text}`} />
+                              <span>Thinking Process</span>
                             </span>
                             {isThoughtExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                           </button>
@@ -378,10 +431,10 @@ export default function Workspace({
                       {parsed.hasArtifact && (
                         <div 
                           onClick={() => setSelectedArtifactMessageId(m.id)}
-                          className={`mt-4 p-3 bg-white border rounded-xl flex items-center justify-between gap-3 text-xs font-bold hover:border-[#C2410C] transition-all cursor-pointer shadow-3xs ${selectedArtifactMessageId === m.id ? 'border-[#C2410C] text-[#C2410C]' : 'border-[#DEC9B3] text-neutral-700'}`}
+                          className={`mt-4 p-3 bg-white border rounded-xl flex items-center justify-between gap-3 text-xs font-bold hover:border-current ${themeColors.hoverBorder} transition-all cursor-pointer shadow-3xs ${selectedArtifactMessageId === m.id ? `border-current ${themeColors.text}` : 'border-[#DEC9B3] text-neutral-700'}`}
                         >
                           <span className="flex items-center gap-2">
-                            <Layers className="w-4 h-4 text-[#C2410C] animate-pulse" />
+                            <Layers className={`w-4 h-4 ${themeColors.text} animate-pulse`} />
                             <span>Script Block: <code className="font-mono bg-[#FAF9F5] px-1 rounded text-neutral-600 font-bold">{parsed.artifactTitle}</code></span>
                           </span>
                           <span className="text-[10px] uppercase font-bold bg-[#FAF1EA] px-2.5 py-1 rounded-lg border border-[#DEC9B3]">
@@ -396,17 +449,7 @@ export default function Workspace({
               
               {/* Stream Formulation bubble */}
               {streaming && messages[messages.length - 1]?.role === 'user' && (
-                <div className="flex flex-col items-start max-w-3xl mx-auto">
-                  <div className="flex items-center gap-1.5 mb-1 text-[10px] text-neutral-400 font-sans px-1">
-                    <span>Mtrini Agent</span>
-                    <span>•</span>
-                    <span>Formulating...</span>
-                  </div>
-                  <div className="p-3.5 bg-white border border-[#E6DCD0] text-neutral-600 rounded-xl rounded-tl-none flex items-center gap-2.5 text-xs font-mono shadow-3xs">
-                    <Loader2 className="w-4 h-4 animate-spin text-[#C2410C]" />
-                    <span>Transcribing network compile stream...</span>
-                  </div>
-                </div>
+                <StreamingThinkingIndicator themeColors={themeColors} />
               )}
 
               <div ref={messagesEndRef} />
@@ -418,49 +461,36 @@ export default function Workspace({
         <div className="p-4 bg-[#FAF8F5] border-t border-[#E6DCD0] select-none shrink-0 z-10">
           <div className="max-w-3xl mx-auto">
             <form onSubmit={handleSubmit} className="flex flex-col bg-white border border-[#DEC9B3] rounded-2xl overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-amber-600 focus-within:border-amber-600 transition-all p-1">
-              
-              {/* PARAMETERS DESK: model engine list and cognition methods */}
+                           {/* PARAMETERS DESK: model engine list and thinking styles */}
               <div className="px-3 py-2 border-b border-[#FAF9F5] bg-[#FAF8F5] flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-500">
                 <div className="flex flex-wrap items-center gap-4">
-                  {/* Model engine switcher */}
-                  <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mr-1">Compile Node:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectModelWithGate('mtrini_1_0')}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border ${selectedModel === 'mtrini_1_0' ? 'bg-white border-[#DEC9B3] text-neutral-900 shadow-3xs font-extrabold' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
-                    >
-                      Mtrini 1.0 (Free)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectModelWithGate('mtrini_1_1')}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border flex items-center gap-1 ${selectedModel === 'mtrini_1_1' ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-3xs font-extrabold' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
-                    >
-                      Mtrini 1.1 (Premium)
-                      {!userProfile?.isPremiumActive && <Lock className="w-3 h-3 text-[#C2410C] shrink-0" />}
-                    </button>
+                  {/* Model engine display */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9.5px] font-bold text-neutral-500 uppercase tracking-wider">Model:</span>
+                    <span className="px-2 py-0.5 bg-white text-neutral-800 font-bold font-mono text-[10px] rounded-lg border border-[#E6DCD0] shadow-3xs">
+                      Mtrini v1.0
+                    </span>
                   </div>
 
                   <div className="h-4 w-[1px] bg-[#E6DCD0]" />
 
-                  {/* Cognition switcher logic */}
+                  {/* Thinking mode switcher */}
                   <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mr-1">Cognition:</span>
+                    <span className="text-[9.5px] font-bold text-neutral-500 uppercase tracking-wider mr-1.5">Thinking Mode:</span>
                     <button
                       type="button"
                       onClick={() => onSelectThinking('fast')}
                       className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border ${selectedThinking === 'fast' ? 'bg-white border-[#DEC9B3] text-neutral-900 shadow-3xs' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
                     >
-                      Fast
+                      Standard
                     </button>
                     <button
                       type="button"
                       onClick={() => onSelectThinking('deep')}
                       className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border flex items-center gap-1 ${selectedThinking === 'deep' ? 'bg-white border-[#DEC9B3] text-neutral-900 shadow-3xs' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
                     >
-                      <Brain className="w-3 h-3 text-[#C2410C]" />
-                      Deep Process
+                      <Brain className="w-3 h-3 text-amber-700" />
+                      Deep Space
                     </button>
                     <button
                       type="button"
@@ -479,7 +509,7 @@ export default function Workspace({
                     className="text-rose-700 hover:text-rose-800 font-bold px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     <Square className="w-2.5 h-2.5 fill-current" />
-                    Halt
+                    Halt Compilation
                   </button>
                 )}
               </div>
@@ -487,7 +517,7 @@ export default function Workspace({
               {/* Central Text Input text area panel */}
               <div className="flex items-start bg-white p-2">
                 <textarea
-                  placeholder="Ask Mtrini anything... Submit a prompt to start compiling. Type directly to trigger conversation thread auto-creation."
+                  placeholder="Ask Mtrini to draft, refactor, or compile custom workspace components..."
                   disabled={streaming}
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
@@ -504,26 +534,73 @@ export default function Workspace({
                 <button
                   type="submit"
                   disabled={streaming || !inputValue.trim()}
-                  className={`p-2.5 rounded-xl transition-all shrink-0 cursor-pointer mt-1 ${inputValue.trim() && !streaming ? 'bg-[#C2410C] text-white hover:bg-[#A13309] shadow-sm' : 'bg-neutral-50 text-neutral-300'}`}
+                  className={`p-2.5 rounded-xl transition-all shrink-0 cursor-pointer mt-1 ${inputValue.trim() && !streaming ? `${themeColors.primary}` : 'bg-neutral-50 text-neutral-300'}`}
                   id="submit-command-btn"
                 >
                   <Send className="w-4 h-4 text-white" />
                 </button>
               </div>
             </form>
-            <p className="text-[10px] text-center text-neutral-400 font-sans mt-2">
-              AP Specifications authorize unlimited compiling. Custom parameters can be tuned in the Control Desk.
-            </p>
+
+            {/* Quick Templates Panel */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5 select-none justify-center">
+              <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider font-mono mr-1">Templates:</span>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset("Write an HTML particle physics canvas banner styled with warm tailwind colors.")}
+                className="px-2.5 py-1 border border-[#EDE8DE] hover:border-[#DEC9B3] rounded-lg bg-white hover:bg-neutral-50 text-[10px] text-neutral-600 font-sans cursor-pointer transition-colors shadow-3xs"
+              >
+                Canvas Banner
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset("Write a robust Roblox Luau event-driven modular dispatcher script.")}
+                className="px-2.5 py-1 border border-[#EDE8DE] hover:border-[#DEC9B3] rounded-lg bg-white hover:bg-neutral-50 text-[10px] text-neutral-600 font-sans cursor-pointer transition-colors shadow-3xs"
+              >
+                Roblox Luau Dispatcher
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset("Write a modern animated digital clock card with localized timezone selector inside an HTML canvas.")}
+                className="px-2.5 py-1 border border-[#EDE8DE] hover:border-[#DEC9B3] rounded-lg bg-white hover:bg-neutral-50 text-[10px] text-neutral-600 font-sans cursor-pointer transition-colors shadow-3xs"
+              >
+                Digital Clock
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset("Compile the interactive Mtrini Studio Video Trailer simulating beautiful kinetic text transitions.")}
+                className="px-2.5 py-1 border border-amber-200 hover:border-amber-400 rounded-lg bg-amber-50/50 hover:bg-white text-[10px] text-amber-800 font-bold font-sans cursor-pointer transition-colors shadow-3xs"
+              >
+                Mtrini Video Trailer
+              </button>
+            </div>
+
+
           </div>
         </div>
       </div>
 
-      {/* 2. Visual rendering Artifact board */}
-      <ArtifactView 
-        artifact={activeArtifact} 
-        onClose={() => setSelectedArtifactMessageId(null)} 
-        themeColor={userProfile?.themeColor || 'cyan'}
-      />
+      {/* 2. Visual rendering Artifact board with smooth sliding animations */}
+      <AnimatePresence>
+        {activeArtifact && (
+          <motion.div
+            key={activeArtifact.artifactTitle || 'active-artifact'}
+            initial={{ opacity: 0, width: 0, x: 50 }}
+            animate={{ opacity: 1, width: isArtifactExpanded ? '100%' : '50%', x: 0 }}
+            exit={{ opacity: 0, width: 0, x: 50 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+            className="h-full flex flex-col overflow-hidden shrink-0 z-20 border-l border-[#E5DFD3]"
+          >
+            <ArtifactView 
+              artifact={activeArtifact} 
+              onClose={() => setSelectedArtifactMessageId(null)} 
+              themeColor={userProfile?.themeColor || 'cyan'}
+              isExpanded={isArtifactExpanded}
+              onToggleExpand={() => setIsArtifactExpanded(!isArtifactExpanded)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -17,6 +17,7 @@ export default function PremiumHubModal({
   const [showLogs, setShowLogs] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<'windows' | 'mac-silicon' | 'mac-intel'>('windows');
   const [detectedPlatform, setDetectedPlatform] = useState<'windows' | 'mac'>('windows');
+  const [copiedCmd, setCopiedCmd] = useState(false);
 
   useEffect(() => {
     const ua = window.navigator.userAgent.toLowerCase();
@@ -39,6 +40,12 @@ export default function PremiumHubModal({
       setSuccessMsg(true);
       setTimeout(() => setSuccessMsg(false), 8000);
     }, 1000);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCmd(true);
+    setTimeout(() => setCopiedCmd(false), 2500);
   };
 
   const getPlatformLabel = () => {
@@ -245,29 +252,77 @@ export default function PremiumHubModal({
             </AnimatePresence>
           </div>
 
-          {/* Simple Professional SmartScreen / Security OS Notice */}
-          <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg space-y-1.5">
+          {/* Comprehensive OS Integration & Gatekeeper Launch Guide */}
+          <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg space-y-2">
             <div className="flex items-center gap-1.5 text-neutral-800 font-bold text-xs select-none">
               <AlertCircle className="w-4 h-4 text-neutral-500 shrink-0" />
               Installation & Launch Guide
             </div>
             
             {selectedPlatform === 'windows' ? (
-              <div className="text-[10px] text-neutral-600 leading-normal space-y-1 font-sans">
-                <p>Because the app is freshly compiled on-demand, Windows Defender might prompt a warning popup:</p>
-                <div className="p-2 bg-white rounded border border-neutral-200/65 text-[9.5px] text-neutral-505 space-y-0.5">
-                  <div>1. Open the downloaded <span className="font-bold text-neutral-800">Mtrini_Desktop_1.1.exe</span> file.</div>
-                  <div>2. On the Windows prompt, click <span className="font-bold text-neutral-800 underline">"More info"</span> underneath the text.</div>
-                  <div>3. Click <span className="font-bold text-emerald-800">"Run anyway"</span> to construct your workspace window.</div>
+              <div className="text-[10.5px] text-neutral-600 leading-normal space-y-2 font-sans">
+                <p>Because the app is freshly compiled on-demand, Windows SmartScreen may trigger a warning on boot:</p>
+                <div className="p-2.5 bg-white rounded border border-neutral-200/65 text-[9.5px] text-neutral-600 space-y-1">
+                  <div>
+                    <strong className="text-neutral-800 font-bold">Step 1:</strong> Launch 
+                    <span className="font-mono bg-neutral-100 px-1 py-0.5 rounded font-bold text-xs text-neutral-900 ml-1">Mtrini_Desktop_1.1.exe</span>
+                  </div>
+                  <div>
+                    <strong className="text-neutral-800 font-bold">Step 2:</strong> When the blue popup appears, click 
+                    <span className="font-bold text-neutral-800 underline mx-1">"More info"</span> 
+                    underneath the text description.
+                  </div>
+                  <div>
+                    <strong className="text-neutral-800 font-bold">Step 3:</strong> Click 
+                    <span className="font-bold text-emerald-800 bg-emerald-50 px-1 rounded ml-1">"Run anyway"</span> 
+                    to begin executing your secure system routing channel.
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="text-[10px] text-neutral-600 leading-normal space-y-1 font-sans">
-                <p>Mac systems require permissions to launch custom command-line utilities:</p>
-                <div className="p-2 bg-white rounded border border-neutral-200/65 text-[9.5px] text-neutral-505 space-y-0.5">
-                  <div>1. Drag or save the file to your Applications folder.</div>
-                  <div>2. Open Terminal and run: <code className="bg-neutral-150 px-1 py-0.5 rounded font-mono font-bold text-red-700">chmod +x /path/to/file</code></div>
-                  <div>3. Right-click the file and select <span className="font-bold text-neutral-800">"Open"</span> to approve execution.</div>
+              <div className="text-[10.5px] text-neutral-600 leading-normal space-y-2 font-sans">
+                <p>macOS restricts unidentified execution by default. Follow this simple 2-step setup to unlock:</p>
+                
+                <div className="p-2.5 bg-white rounded border border-neutral-200/65 space-y-2.5">
+                  <div className="space-y-1">
+                    <span className="text-[9.5px] font-bold text-neutral-900 uppercase tracking-wide block">
+                      1. Enable Executable Permission:
+                    </span>
+                    <p className="text-[9px] text-neutral-500 leading-tight">
+                      Open your macOS <strong className="text-neutral-700">Terminal app</strong>, then copy and paste the command for your downloaded binary:
+                    </p>
+                    
+                    {/* Interactive Copy Terminal Cmd block */}
+                    <div className="relative group">
+                      <pre className="text-[9px] font-mono bg-neutral-900 text-[#CDAF7E] p-2 rounded-md overflow-x-auto border border-neutral-800 whitespace-pre">
+                        {`chmod +x ~/Downloads/${getPlatformFile()}`}
+                      </pre>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(`chmod +x ~/Downloads/${getPlatformFile()}`)}
+                        className="absolute right-1.5 top-1.5 px-1.5 py-0.5 bg-neutral-800 text-neutral-300 rounded text-[8px] font-bold hover:bg-neutral-700 select-none uppercase tracking-wide"
+                      >
+                        {copiedCmd ? 'Copied!' : 'Copy Code'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-neutral-100 pt-2 space-y-1">
+                    <span className="text-[9.5px] font-bold text-neutral-900 uppercase tracking-wide block">
+                      2. Authorize Apple Gatekeeper:
+                    </span>
+                    <div className="text-[9.5px] text-neutral-600 space-y-1">
+                      <div>
+                        • Drag <span className="font-mono bg-neutral-100 px-0.5 rounded font-bold text-[9px]">{getPlatformFile()}</span> from Downloads into your <strong className="text-neutral-800">Applications</strong> folder.
+                      </div>
+                      <div>
+                        • <strong className="text-neutral-800">Right-click (Control + Click)</strong> the file and choose <strong className="text-neutral-800 underline">"Open"</strong>. This overrides Gatekeeper security instantly.
+                      </div>
+                      <div className="text-[9px] text-neutral-500 bg-neutral-50 pl-2 border-l border-neutral-300 py-0.5 mt-1 leading-snug">
+                        *Alternative: If blocked, navigate to <strong className="text-neutral-700">System Settings &gt; Privacy & Security</strong>, scroll down to the security segment and click <strong className="text-emerald-700 underline">"Open Anyway"</strong>.
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

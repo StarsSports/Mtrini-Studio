@@ -16,60 +16,73 @@ import {
   where, 
   orderBy,
   serverTimestamp,
-  deleteDoc
+  deleteDoc,
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
 
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { ChatThread, Message, UserProfile, ThemeColors } from './types';
 import { Loader2 } from 'lucide-react';
-import { AnimatePresence } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 
 import LoginGate from './components/LoginGate';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
 import RightDrawer from './components/RightDrawer';
 import PremiumHubModal from './components/PremiumHubModal';
+import StartMenuModal from './components/StartMenuModal';
 
 const THEME_COLORS_MAP: Record<string, ThemeColors> = {
   cyan: {
-    primary: 'bg-cyan-500 hover:bg-cyan-400 border-cyan-400/20 text-neutral-950',
+    primary: 'bg-cyan-600 hover:bg-cyan-700 text-white shadow-3xs',
     glow: 'cyan',
-    border: 'border-cyan-800/20',
-    bg: 'bg-neutral-950',
-    text: 'text-cyan-400',
-    glowClass: 'shadow-[0_0_15px_rgba(6,182,212,0.15)] shadow-cyan-400/20'
+    border: 'border-cyan-200',
+    bg: 'bg-cyan-50/50',
+    text: 'text-cyan-600',
+    glowClass: 'bg-cyan-50/75 border-cyan-150',
+    ring: 'focus:ring-cyan-600 focus:border-cyan-600',
+    hoverBorder: 'hover:border-cyan-500/50'
   },
   emerald: {
-    primary: 'bg-emerald-500 hover:bg-emerald-400 border-emerald-400/20 text-neutral-950',
+    primary: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-3xs',
     glow: 'emerald',
-    border: 'border-emerald-800/20',
-    bg: 'bg-neutral-950',
-    text: 'text-emerald-400',
-    glowClass: 'shadow-[0_0_15px_rgba(16,185,129,0.15)] shadow-emerald-400/20'
+    border: 'border-emerald-200',
+    bg: 'bg-emerald-50/50',
+    text: 'text-emerald-600',
+    glowClass: 'bg-emerald-50/75 border-emerald-150',
+    ring: 'focus:ring-emerald-600 focus:border-emerald-600',
+    hoverBorder: 'hover:border-emerald-500/50'
   },
   crimson: {
-    primary: 'bg-rose-500 hover:bg-rose-400 border-rose-400/20 text-neutral-950',
+    primary: 'bg-rose-600 hover:bg-rose-700 text-white shadow-3xs',
     glow: 'rose',
-    border: 'border-rose-800/20',
-    bg: 'bg-neutral-950',
-    text: 'text-rose-400',
-    glowClass: 'shadow-[0_0_15px_rgba(244,63,94,0.15)] shadow-rose-400/20'
+    border: 'border-rose-200',
+    bg: 'bg-rose-50/50',
+    text: 'text-rose-600',
+    glowClass: 'bg-rose-50/75 border-rose-150',
+    ring: 'focus:ring-rose-600 focus:border-rose-600',
+    hoverBorder: 'hover:border-rose-500/50'
   },
   amber: {
-    primary: 'bg-amber-500 hover:bg-amber-400 border-amber-400/20 text-neutral-950',
+    primary: 'bg-amber-600 hover:bg-amber-700 text-white shadow-3xs',
     glow: 'amber',
-    border: 'border-amber-800/20',
-    bg: 'bg-neutral-950',
-    text: 'text-amber-400',
-    glowClass: 'shadow-[0_0_15px_rgba(245,158,11,0.15)] shadow-amber-400/20'
+    border: 'border-amber-200',
+    bg: 'bg-amber-50/50',
+    text: 'text-amber-700',
+    glowClass: 'bg-amber-50/75 border-amber-150',
+    ring: 'focus:ring-amber-600 focus:border-amber-600',
+    hoverBorder: 'hover:border-amber-500/50'
   },
   violet: {
-    primary: 'bg-violet-500 hover:bg-violet-400 border-violet-400/20 text-neutral-950',
+    primary: 'bg-violet-600 hover:bg-violet-700 text-white shadow-3xs',
     glow: 'violet',
-    border: 'border-violet-800/20',
-    bg: 'bg-neutral-950',
-    text: 'text-violet-400',
-    glowClass: 'shadow-[0_0_15px_rgba(139,92,246,0.15)] shadow-violet-400/20'
+    border: 'border-violet-200',
+    bg: 'bg-violet-50/50',
+    text: 'text-violet-600',
+    glowClass: 'bg-violet-50/75 border-violet-150',
+    ring: 'focus:ring-violet-600 focus:border-violet-600',
+    hoverBorder: 'hover:border-violet-500/50'
   }
 };
 
@@ -89,21 +102,52 @@ export default function App() {
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
   
   // SSE Streaming engine parameters
   const [streaming, setStreaming] = useState(false);
   const abortControllerRef = React.useRef<AbortController | null>(null);
+  const activeChatIdRef = React.useRef<string | null>(null);
+  const streamingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    activeChatIdRef.current = activeChatId;
+  }, [activeChatId]);
+
+  React.useEffect(() => {
+    streamingRef.current = streaming;
+  }, [streaming]);
 
   const [isPremiumHubOpen, setIsPremiumHubOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type?: 'info' | 'success' } | null>(null);
+
+  // Auto clear toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   // Models and Thinking modes state (Claude aesthetic integration)
   const [selectedModel, setSelectedModel] = useState<'mtrini_1_0' | 'mtrini_1_1'>('mtrini_1_0');
   const [selectedThinking, setSelectedThinking] = useState<'fast' | 'deep' | 'short'>('fast');
 
+  // Onboarding auto-launch effect
+  useEffect(() => {
+    if (userProfile) {
+      const isCompleted = localStorage.getItem('mtrini_onboarded');
+      if (isCompleted !== 'true') {
+        setIsStartMenuOpen(true);
+      }
+    }
+  }, [userProfile]);
+
   // 1. Subscribe to Firebase Authentication States
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setLoading(true);
+      setActiveChatId(null);
       if (user) {
         setCurrentUser(user);
         setIsGuest(false);
@@ -249,7 +293,7 @@ export default function App() {
       // Local Storage Thread loader
       const threads = JSON.parse(localStorage.getItem('mtrini_guest_threads') || '[]');
       setChatThreads(threads);
-      if (threads.length > 0 && !activeChatId) {
+      if (threads.length > 0 && !activeChatIdRef.current) {
         setActiveChatId(threads[0].id);
       }
     } else {
@@ -273,7 +317,7 @@ export default function App() {
           });
         });
         setChatThreads(threads);
-        if (threads.length > 0 && !activeChatId) {
+        if (threads.length > 0 && !activeChatIdRef.current) {
           setActiveChatId(threads[0].id);
         }
       }, (err) => {
@@ -301,6 +345,11 @@ export default function App() {
       );
       
       const unsub = onSnapshot(q, (snapshot) => {
+        // If currently streaming content via SSE, prevent database updates from overwriting the live text
+        if (streamingRef.current) {
+          return;
+        }
+
         const msgs: Message[] = [];
         snapshot.forEach((doc) => {
           const data = doc.data();
@@ -372,6 +421,54 @@ export default function App() {
     }
   };
 
+  const handleDeleteChat = async (threadId: string) => {
+    if (!userProfile) return;
+
+    if (isGuest) {
+      const revised = chatThreads.filter((t) => t.id !== threadId);
+      setChatThreads(revised);
+      localStorage.setItem('mtrini_guest_threads', JSON.stringify(revised));
+      localStorage.removeItem(`mtrini_guest_msgs_${threadId}`);
+      if (activeChatId === threadId) {
+        setActiveChatId(revised.length > 0 ? revised[0].id : null);
+      }
+    } else {
+      const path = `chats/${threadId}`;
+      try {
+        await deleteDoc(doc(db, 'chats', threadId));
+        if (activeChatId === threadId) {
+          const remaining = chatThreads.filter((t) => t.id !== threadId);
+          setActiveChatId(remaining.length > 0 ? remaining[0].id : null);
+        }
+      } catch (err: any) {
+        handleFirestoreError(err, OperationType.DELETE, path);
+      }
+    }
+  };
+
+  const handleClearMessages = async () => {
+    if (!activeChatId || !userProfile) return;
+    if (!confirm("Are you sure you want to clear all messages in this conversation thread? This action cannot be undone.")) return;
+
+    if (isGuest) {
+      localStorage.setItem(`mtrini_guest_msgs_${activeChatId}`, '[]');
+      setMessages([]);
+    } else {
+      const path = `chats/${activeChatId}/messages`;
+      try {
+        const snap = await getDocs(collection(db, 'chats', activeChatId, 'messages'));
+        const batch = writeBatch(db);
+        snap.forEach((d) => {
+          batch.delete(doc(db, 'chats', activeChatId, 'messages', d.id));
+        });
+        await batch.commit();
+        setMessages([]);
+      } catch (err: any) {
+        handleFirestoreError(err, OperationType.DELETE, path);
+      }
+    }
+  };
+
   const handleUpdateApiKey = (newKey: string) => {
     setLocalApiKey(newKey);
     localStorage.setItem('mtrini_api_key', newKey);
@@ -386,6 +483,51 @@ export default function App() {
       await signOut(auth);
     }
   };
+
+  // Global Keyboard Shortcuts Event Listener
+  useEffect(() => {
+    if (!userProfile) return;
+    
+    // Default shortcuts to true if not specified
+    if (userProfile.shortcutsEnabled === false) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // If pressing alt key
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const key = e.key.toLowerCase();
+        if (key === 'n') {
+          e.preventDefault();
+          handleNewChat();
+          setToast({ message: 'HotKey: Started brand new session!', type: 'success' });
+        } else if (key === 's') {
+          e.preventDefault();
+          setIsPreferencesOpen(prev => !prev);
+          setToast({ message: `HotKey: Toggled Control Desk Settings`, type: 'info' });
+        } else if (key === 'h') {
+          e.preventDefault();
+          setIsPremiumHubOpen(prev => !prev);
+          setToast({ message: `HotKey: Toggled Desktop Applications Hub`, type: 'info' });
+        } else if (key === 'c') {
+          e.preventDefault();
+          setIsStartMenuOpen(prev => !prev);
+          setToast({ message: `HotKey: Toggled Welcome Guide`, type: 'info' });
+        } else if (key === 'd') {
+          e.preventDefault();
+          handleClearMessages();
+        }
+      }
+
+      // Escape always closes panels
+      if (e.key === 'Escape') {
+        setIsPreferencesOpen(false);
+        setIsPremiumHubOpen(false);
+        setIsStartMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [userProfile, isGuest, chatThreads, activeChatId]);
 
   // Helper inside client state to consume Server-Sent Events Chat Streams
   const handleSendMessage = async (text: string) => {
@@ -508,36 +650,52 @@ export default function App() {
 
       const decoder = new TextDecoder();
       let streamContent = '';
+      let streamBuffer = '';
+
+      const processSSELine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        if (trimmed.startsWith('data: ')) {
+          const dataStr = trimmed.substring(6).trim();
+          if (dataStr === '[DONE]') {
+            return;
+          }
+          try {
+            const parsedJson = JSON.parse(dataStr);
+            if (parsedJson.error) {
+              throw new Error(parsedJson.error);
+            }
+            if (parsedJson.text) {
+              streamContent += parsedJson.text;
+              // Batch up progress
+              setMessages((prev) => 
+                prev.map((m) => m.id === draftAssistantId ? { ...m, content: streamContent } : m)
+              );
+            }
+          } catch (pErr) {
+            // Ignore partial logs JSON parse issues during stream chunks split
+          }
+        }
+      };
 
       while (true) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          if (streamBuffer.trim()) {
+            processSSELine(streamBuffer);
+          }
+          break;
+        }
 
-        const chunkText = decoder.decode(value);
-        const lines = chunkText.split('\n');
+        const chunkText = decoder.decode(value, { stream: true });
+        streamBuffer += chunkText;
+        const lines = streamBuffer.split('\n');
+        
+        // Keep the last partial line in the buffer
+        streamBuffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.substring(6).trim();
-            if (dataStr === '[DONE]') {
-              break;
-            }
-            try {
-              const parsedJson = JSON.parse(dataStr);
-              if (parsedJson.error) {
-                throw new Error(parsedJson.error);
-              }
-              if (parsedJson.text) {
-                streamContent += parsedJson.text;
-                // Batch up progress
-                setMessages((prev) => 
-                  prev.map((m) => m.id === draftAssistantId ? { ...m, content: streamContent } : m)
-                );
-              }
-            } catch (pErr) {
-              // Ignore partial logs JSON parse issues during stream chunks split
-            }
-          }
+          processSSELine(line);
         }
       }
 
@@ -622,8 +780,10 @@ export default function App() {
         onLogout={handleLogout}
         onOpenPreferences={() => setIsPreferencesOpen(true)}
         onOpenPremiumHub={() => setIsPremiumHubOpen(true)}
+        onOpenStartMenu={() => setIsStartMenuOpen(true)}
         userProfile={userProfile}
         themeColors={activeThemeProps}
+        onDeleteChat={handleDeleteChat}
       />
 
       {/* 2. Central Dual Panel Workspace System */}
@@ -641,20 +801,31 @@ export default function App() {
         onSelectModel={setSelectedModel}
         selectedThinking={selectedThinking}
         onSelectThinking={setSelectedThinking}
+        onClearMessages={handleClearMessages}
       />
 
       {/* 3. Settings Control Desk sliding Drawer */}
       <AnimatePresence>
         {isPreferencesOpen && (
-          <RightDrawer
-            isOpen={isPreferencesOpen}
-            onClose={() => setIsPreferencesOpen(false)}
-            userProfile={userProfile}
-            onUpdatePreferences={handleUpdatePreferences}
-            themeColors={activeThemeProps}
-            localApiKey={localApiKey}
-            onUpdateApiKey={handleUpdateApiKey}
-          />
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => setIsPreferencesOpen(false)}
+              className="fixed inset-0 bg-neutral-900/40 backdrop-blur-3xs z-40 cursor-pointer"
+            />
+            <RightDrawer
+              isOpen={isPreferencesOpen}
+              onClose={() => setIsPreferencesOpen(false)}
+              userProfile={userProfile}
+              onUpdatePreferences={handleUpdatePreferences}
+              themeColors={activeThemeProps}
+              localApiKey={localApiKey}
+              onUpdateApiKey={handleUpdateApiKey}
+            />
+          </>
         )}
       </AnimatePresence>
 
@@ -665,6 +836,34 @@ export default function App() {
             onClose={() => setIsPremiumHubOpen(false)}
             userProfile={userProfile}
           />
+        )}
+      </AnimatePresence>
+
+      {/* 5. Welcome & Onboarding Guide Hub */}
+      <AnimatePresence>
+        {isStartMenuOpen && (
+          <StartMenuModal
+            onClose={() => setIsStartMenuOpen(false)}
+            userProfile={userProfile}
+            onUpdatePreferences={handleUpdatePreferences}
+            onSendMessage={handleSendMessage}
+            themeColors={activeThemeProps}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 6. High-Fidelity Feedback Toasts */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 15, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-[#FAF8F5] border border-[#DEC9B3] text-neutral-900 rounded-xl shadow-xl flex items-center gap-2.5 font-sans font-bold text-xs"
+          >
+            <div className={`w-2 h-2 rounded-full ${toast.type === 'success' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-pulse'}`} />
+            <span>{toast.message}</span>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

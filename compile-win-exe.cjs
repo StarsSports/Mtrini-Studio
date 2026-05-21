@@ -56,12 +56,12 @@ console.log('[+] Created cross-platform launcher.js source code.');
 // 1. Build Windows x64 Binary
 console.log('[+] Compiling Windows Native Executable (Win 10/11 x64)...');
 try {
-  execSync('npx pkg -t node18-win-x64 launcher.js -o Mtrini_Desktop_1.1.exe', { stdio: 'inherit' });
+  execSync('npx pkg --no-bytecode -t node18-win-x64 launcher.js -o Mtrini_Desktop_1.1.exe', { stdio: 'inherit' });
   console.log('[✔] Compiled successfully: Mtrini_Desktop_1.1.exe');
 } catch (e) {
   console.error('[!] Primary Windows compilation failed, trying fallback...', e.message);
   try {
-    execSync('npx pkg -t node16-win-x64 launcher.js -o Mtrini_Desktop_1.1.exe', { stdio: 'inherit' });
+    execSync('npx pkg --no-bytecode -t node16-win-x64 launcher.js -o Mtrini_Desktop_1.1.exe', { stdio: 'inherit' });
   } catch (e2) {
     console.error('[!] Critical Windows compilation failure.', e2.message);
   }
@@ -70,12 +70,12 @@ try {
 // 2. Build Mac Silicon Binary
 console.log('[+] Compiling macOS Apple Silicon Executable (M1/M2/M3)...');
 try {
-  execSync('npx pkg -t node18-macos-arm64 launcher.js -o Mtrini_Mac_Silicon', { stdio: 'inherit' });
+  execSync('npx pkg --no-bytecode -t node18-macos-arm64 launcher.js -o Mtrini_Mac_Silicon', { stdio: 'inherit' });
   console.log('[✔] Compiled successfully: Mtrini_Mac_Silicon');
 } catch (e) {
   console.error('[!] macOS Silicon compilation failed, trying fallback node16...', e.message);
   try {
-    execSync('npx pkg -t node16-macos-arm64 launcher.js -o Mtrini_Mac_Silicon', { stdio: 'inherit' });
+    execSync('npx pkg --no-bytecode -t node16-macos-arm64 launcher.js -o Mtrini_Mac_Silicon', { stdio: 'inherit' });
   } catch (e2) {
     console.error('[!] Failed to compile Mac Silicon binary.', e2.message);
   }
@@ -84,12 +84,12 @@ try {
 // 3. Build Mac Intel Binary
 console.log('[+] Compiling macOS Intel Executable (x64)...');
 try {
-  execSync('npx pkg -t node18-macos-x64 launcher.js -o Mtrini_Mac_Intel', { stdio: 'inherit' });
+  execSync('npx pkg --no-bytecode -t node18-macos-x64 launcher.js -o Mtrini_Mac_Intel', { stdio: 'inherit' });
   console.log('[✔] Compiled successfully: Mtrini_Mac_Intel');
 } catch (e) {
   console.error('[!] macOS Intel compilation failed, trying fallback node16...', e.message);
   try {
-    execSync('npx pkg -t node16-macos-x64 launcher.js -o Mtrini_Mac_Intel', { stdio: 'inherit' });
+    execSync('npx pkg --no-bytecode -t node16-macos-x64 launcher.js -o Mtrini_Mac_Intel', { stdio: 'inherit' });
   } catch (e2) {
     console.error('[!] Failed to compile Mac Intel binary.', e2.message);
   }

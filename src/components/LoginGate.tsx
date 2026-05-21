@@ -104,7 +104,7 @@ export default function LoginGate({ onGuestLogin }: LoginGateProps) {
             Creative Development Workspace
           </p>
           <div className="mt-2 text-xs text-[#a16207] italic font-serif">
-            "Mtrini: Made By Nova AI (a Ayham Projects group)"
+            "Mtrini: Made By Nova AI"
           </div>
         </div>
 
@@ -142,7 +142,7 @@ export default function LoginGate({ onGuestLogin }: LoginGateProps) {
                 <User className="absolute left-3.5 top-3 w-4 h-4 text-neutral-400" />
                 <input
                   type="text"
-                  placeholder="Ayham Projects Dev"
+                  placeholder="Nova AI Developer"
                   required
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}

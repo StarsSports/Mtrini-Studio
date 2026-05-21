@@ -8,6 +8,9 @@ export interface UserProfile {
   mcpServer: string;
   isPremiumActive?: boolean;
   mcpConfig?: string;
+  streamingEnabled?: boolean;
+  compilationSpeed?: 'fast' | 'balanced' | 'safe';
+  shortcutsEnabled?: boolean;
   createdAt: Date;
 }
 
@@ -44,6 +47,8 @@ export interface ThemeColors {
   bg: string;
   text: string;
   glowClass: string;
+  ring?: string;
+  hoverBorder?: string;
 }
 
 export interface McpServerConfig {

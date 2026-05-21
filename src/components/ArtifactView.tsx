@@ -1,18 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Copy, Check, Download, Code, Eye, FileText, Info, X
+  Copy, Check, Download, Code, Eye, FileText, Info, X, Maximize2, Minimize2
 } from 'lucide-react';
 import { downloadFile, ParsedMessage } from '../utils';
+import MtriniIntroTrailer from './MtriniIntroTrailer';
 
 interface ArtifactViewProps {
   artifact: ParsedMessage | null;
   onClose: () => void;
   themeColor: string;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
-export default function ArtifactView({ artifact, onClose, themeColor }: ArtifactViewProps) {
+export default function ArtifactView({ 
+  artifact, 
+  onClose, 
+  themeColor, 
+  isExpanded = false, 
+  onToggleExpand 
+}: ArtifactViewProps) {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'editor' | 'sandbox'>('editor');
+
+  const title = artifact?.artifactTitle || 'script.txt';
+  const isTrailer = title.toLowerCase().includes('trailer');
+
+  useEffect(() => {
+    if (isTrailer) {
+      setActiveTab('sandbox');
+    } else {
+      setActiveTab('editor');
+    }
+  }, [artifact, isTrailer]);
 
   if (!artifact || !artifact.hasArtifact) {
     return (
@@ -31,8 +51,25 @@ export default function ArtifactView({ artifact, onClose, themeColor }: Artifact
   }
 
   const code = artifact.artifactCode || '';
-  const title = artifact.artifactTitle || 'script.txt';
   const language = artifact.artifactLanguage || 'text';
+
+  const getThemeWeights = (col: string) => {
+    switch (col) {
+      case 'emerald':
+        return { text: 'text-emerald-700', bg: 'bg-emerald-50/80 border-emerald-100', textMuted: 'text-emerald-600' };
+      case 'crimson':
+        return { text: 'text-rose-700', bg: 'bg-rose-50/80 border-rose-100', textMuted: 'text-rose-600' };
+      case 'amber':
+        return { text: 'text-amber-700', bg: 'bg-amber-50/80 border-amber-100', textMuted: 'text-[#C2410C]' };
+      case 'violet':
+        return { text: 'text-violet-700', bg: 'bg-violet-50/80 border-violet-100', textMuted: 'text-violet-600' };
+      case 'cyan':
+      default:
+        return { text: 'text-cyan-700', bg: 'bg-cyan-50/80 border-cyan-100', textMuted: 'text-cyan-600' };
+    }
+  };
+
+  const weights = getThemeWeights(themeColor);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
@@ -45,14 +82,14 @@ export default function ArtifactView({ artifact, onClose, themeColor }: Artifact
   };
 
   // Safe Sandboxing conditions
-  const canPreview = ['html', 'htm', 'svg'].includes(language.toLowerCase()) || code.trim().startsWith('<');
+  const canPreview = ['html', 'htm', 'svg'].includes(language.toLowerCase()) || code.trim().startsWith('<') || isTrailer;
 
   return (
     <div className="flex-1 flex flex-col bg-white border-l border-[#E5DFD3] overflow-hidden font-sans relative">
       {/* Script Header Panel */}
       <div className="h-12 border-b border-[#E5DFD3] px-4 bg-[#F5F1EA] flex items-center justify-between select-none shrink-0">
         <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-amber-700 shrink-0" />
+          <FileText className={`w-4 h-4 ${weights.textMuted} shrink-0`} />
           <div className="flex flex-col">
             <span className="text-xs font-semibold text-neutral-800 truncate max-w-[200px] leading-tight">{title}</span>
             <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest leading-none">workspace / {language}</span>
@@ -63,7 +100,7 @@ export default function ArtifactView({ artifact, onClose, themeColor }: Artifact
         <div className="flex items-center gap-1.5 p-1 bg-white rounded-lg border border-[#E2DFD3]">
           <button
             onClick={() => setActiveTab('editor')}
-            className={`px-3 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1 ${activeTab === 'editor' ? 'bg-[#F2ECE5] text-[#a16207]' : 'text-neutral-500 hover:text-neutral-850'}`}
+            className={`px-3 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1 ${activeTab === 'editor' ? `${weights.bg} ${weights.text} border border-current shadow-3xs` : 'text-neutral-500 hover:text-neutral-850'}`}
           >
             <Code className="w-3 h-3" />
             Script Source
@@ -72,7 +109,7 @@ export default function ArtifactView({ artifact, onClose, themeColor }: Artifact
           {canPreview && (
             <button
               onClick={() => setActiveTab('sandbox')}
-              className={`px-3 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1 ${activeTab === 'sandbox' ? 'bg-[#F2ECE5] text-amber-905 font-bold' : 'text-neutral-500 hover:text-neutral-850'}`}
+              className={`px-3 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1 ${activeTab === 'sandbox' ? `${weights.bg} ${weights.text} font-bold border border-current shadow-3xs` : 'text-neutral-500 hover:text-neutral-850'}`}
             >
               <Eye className="w-3 h-3" />
               Interactive Preview
@@ -81,7 +118,7 @@ export default function ArtifactView({ artifact, onClose, themeColor }: Artifact
         </div>
 
         {/* Quick Toolbar */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={handleCopy}
             className="p-1.5 hover:bg-white/80 border border-transparent hover:border-[#E2DFD3] rounded-lg text-neutral-600 hover:text-neutral-900 transition-all cursor-pointer relative group"
@@ -97,6 +134,16 @@ export default function ArtifactView({ artifact, onClose, themeColor }: Artifact
           >
             <Download className="w-3.5 h-3.5" />
           </button>
+
+          {onToggleExpand && (
+            <button
+              onClick={onToggleExpand}
+              className="p-1.5 hover:bg-white/80 border border-transparent hover:border-[#E2DFD3] rounded-lg text-neutral-600 hover:text-neutral-900 transition-all cursor-pointer"
+              title={isExpanded ? "Exit full screen" : "Toggle full screen (100% width)"}
+            >
+              {isExpanded ? <Minimize2 className="w-3.5 h-3.5 text-neutral-700" /> : <Maximize2 className="w-3.5 h-3.5 text-neutral-700" />}
+            </button>
+          )}
 
           <button
             onClick={onClose}
@@ -137,17 +184,23 @@ export default function ArtifactView({ artifact, onClose, themeColor }: Artifact
         ) : (
           /* Sandbox Preview Pane */
           <div className="flex-1 h-full bg-[#FCFCFA] overflow-hidden relative flex flex-col">
-            <div className="p-2 bg-[#F5F1EA] border-b border-[#E5DFD3] flex items-center justify-between text-[10px] font-sans select-none">
-              <span className="text-neutral-500">Virtual Sandbox Iframe compiled safely.</span>
-              <span className="text-emerald-700 bg-emerald-55 border border-emerald-200 px-1.5 py-0.5 rounded font-semibold uppercase animate-pulse">Running Interactive</span>
-            </div>
-            
-            <iframe
-              srcDoc={code}
-              title="Mtrini runtime sandbox render"
-              sandbox="allow-scripts allow-modals"
-              className="w-full h-full flex-1 bg-white"
-            />
+            {isTrailer ? (
+              <MtriniIntroTrailer />
+            ) : (
+              <>
+                <div className="p-2 bg-[#F5F1EA] border-b border-[#E5DFD3] flex items-center justify-between text-[10px] font-sans select-none">
+                  <span className="text-neutral-500">Virtual Sandbox Iframe compiled safely.</span>
+                  <span className="text-emerald-750 bg-emerald-55 border border-emerald-250 px-1.5 py-0.5 rounded font-semibold uppercase animate-pulse">Running Interactive</span>
+                </div>
+                
+                <iframe
+                  srcDoc={code}
+                  title="Mtrini runtime sandbox render"
+                  sandbox="allow-scripts allow-modals"
+                  className="w-full h-full flex-1 bg-white"
+                />
+              </>
+            )}
           </div>
         )}
       </div>
