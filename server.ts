@@ -25,6 +25,13 @@ const aiClient = apiKey
     })
   : null;
 
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    console.log(`[API Request] ${req.method} ${req.path}`);
+  }
+  next();
+});
+
 // API Route: Healthcheck
 app.get('/api/health', (req, res) => {
   res.json({ 

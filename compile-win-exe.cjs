@@ -70,12 +70,12 @@ try {
 // 2. Build Mac Silicon Binary
 console.log('[+] Compiling macOS Apple Silicon Executable (M1/M2/M3)...');
 try {
-  execSync('npx pkg -t node16-macos-arm64 launcher.js -o Mtrini_Mac_Silicon', { stdio: 'inherit' });
+  execSync('npx pkg -t node16-macos-arm64 launcher.js -o Mtrini_Mac_Silicon --no-bytecode', { stdio: 'inherit' });
   console.log('[✔] Compiled successfully: Mtrini_Mac_Silicon');
 } catch (e) {
   console.error('[!] macOS Silicon compilation failed, trying fallback...', e.message);
   try {
-    execSync('npx pkg -t node16-macos-arm64 launcher.js -o Mtrini_Mac_Silicon', { stdio: 'inherit' });
+    execSync('npx pkg -t node16-macos-arm64 launcher.js -o Mtrini_Mac_Silicon --no-bytecode', { stdio: 'inherit' });
   } catch (e2) {
     console.error('[!] Failed to compile Mac Silicon binary.', e2.message);
   }
@@ -94,3 +94,5 @@ try {
     console.error('[!] Failed to compile Mac Intel binary.', e2.message);
   }
 }
+
+process.exit(0);
