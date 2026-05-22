@@ -36,18 +36,13 @@ export default function RightDrawer({
   localApiKey,
   onUpdateApiKey
 }: RightDrawerProps) {
-  const [connectingKey, setConnectingKey] = useState<string | null>(null);
   const [mcpJsonStr, setMcpJsonStr] = useState(() => userProfile?.mcpConfig || DEFAULT_MCP_CONFIG);
   const [jsonError, setJsonError] = useState<string | null>(null);
-  const [parsedServers, setParsedServers] = useState<Record<string, { url: string; enabled: boolean }>>({});
-  const [testResults, setTestResults] = useState<Record<string, { status: 'idle' | 'success' | 'error'; msg: string; tools?: any[] }>>({});
-
-  const [customUrls, setCustomUrls] = useState<Record<string, string>>({});
+  const [parsedServers, setParsedServers] = useState<Record<string, { command?: string; args?: string[]; url?: string; enabled?: boolean }>>({});
 
   useEffect(() => {
     try {
       let parsed = JSON.parse(mcpJsonStr);
-      // Validate structure roughly
       if (typeof parsed === 'object' && parsed !== null) {
         if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
           parsed = parsed.mcpServers;
@@ -64,126 +59,10 @@ export default function RightDrawer({
 
   const handleSaveJsonConfig = () => {
     if (jsonError) return;
-    const activeUrl = (Object.entries(parsedServers) as [string, any][]).map(([id, srv]) => {
-      return customUrls[id] !== undefined ? customUrls[id] : (srv.url || '');
-    }).filter(Boolean)[0] || '';
-
     onUpdatePreferences({ 
       mcpConfig: mcpJsonStr,
-      // Fallback for older code using single URL
-      mcpServer: activeUrl
+      mcpServer: 'Roblox_Studio_JSON_STDIO'
     });
-  };
-
-  const handleTestServer = async (key: string, url: string) => {
-    setConnectingKey(key);
-    // Reset result for this key
-    setTestResults(prev => ({
-      ...prev,
-      [key]: { status: 'idle', msg: 'Linking with server endpoint...' }
-    }));
-
-    try {
-      let data: any = null;
-      let isConnected = false;
-      let errorMsg = '';
-
-      const isLocalhost = url.includes('localhost') || url.includes('127.0.0.1');
-
-      if (isLocalhost) {
-        // Direct client-side handshake bypassing the container backend (which cannot reach user's local machine)
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3000);
-          
-          let fetched = await fetch(`${url}/tools`, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' },
-            signal: controller.signal
-          }).catch(async () => {
-            // Retry with POST
-            return await fetch(`${url}/tools`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({}),
-              signal: controller.signal
-            });
-          });
-          
-          clearTimeout(timeoutId);
-
-          if (fetched.ok) {
-            data = await fetched.json();
-            isConnected = true;
-          } else {
-            throw new Error(`Local MCP server returned status ${fetched.status}`);
-          }
-        } catch (localErr: any) {
-          console.warn('Direct local handshake failed, fallback to server probe...', localErr);
-          
-          // Try backend too in case it's tunnel-mapped
-          const response = await fetch('/api/mcp/scan', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
-          });
-          
-          if (response.ok) {
-            const resData = await response.json();
-            data = resData;
-            isConnected = resData.status === 'connected';
-            errorMsg = resData.message || '';
-          } else {
-            throw new Error('Localhost connection failed. Make sure Roblox Studio MCP is running on this port, CORS is enabled, or use a secure tunnel (like ngrok/localtunnel).');
-          }
-        }
-      } else {
-        // Standard remote or tunnel URL - proxy via our Cloud Run backend
-        const response = await fetch('/api/mcp/scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
-
-        if (response.ok) {
-          const resData = await response.json();
-          data = resData;
-          isConnected = resData.status === 'connected';
-          errorMsg = resData.message || '';
-        } else {
-          throw new Error('Connection refused by remote host.');
-        }
-      }
-
-      if (isConnected && data) {
-        setTestResults(prev => ({
-          ...prev,
-          [key]: { 
-            status: 'success', 
-            msg: `Connected! Found ${data.tools?.length || 0} active Roblox/toolsets.`,
-            tools: data.tools || []
-          }
-        }));
-      } else {
-        setTestResults(prev => ({
-          ...prev,
-          [key]: { 
-            status: 'error', 
-            msg: errorMsg || (data && data.message) || 'Handshake failed.' 
-          }
-        }));
-      }
-    } catch (err: any) {
-      setTestResults(prev => ({
-        ...prev,
-        [key]: { 
-          status: 'error', 
-          msg: `Bridge failed: ${err.message || err}. Tip: Ensure CORS is enabled on your local server, or run ngrok to expose your local Roblox MCP.` 
-        }
-      }));
-    } finally {
-      setConnectingKey(null);
-    }
   };
 
   const personaOptions = [
@@ -489,69 +368,53 @@ export default function RightDrawer({
             )}
           </div>
 
-          {/* Render individual parsed servers list with manual link testers! */}
+          {/* Render individual parsed servers list directly aligned with pure JSON config */}
           {!jsonError && Object.keys(parsedServers).length > 0 && (
             <div className="pt-2 border-t border-[#EDE8DE] space-y-2">
-              <span className="text-[9px] font-bold text-neutral-500 font-mono uppercase tracking-wider block">Fleet Endpoints ({Object.keys(parsedServers).length}):</span>
+              <span className="text-[9px] font-bold text-neutral-500 font-mono uppercase tracking-wider block">Connected Fleet Endpoints ({Object.keys(parsedServers).length}):</span>
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
                 {(Object.entries(parsedServers) as [string, any][]).map(([id, srv]) => {
-                  const isTesting = connectingKey === id;
-                  const res = testResults[id];
-                  const displayUrl = customUrls[id] !== undefined ? customUrls[id] : (srv.url || '');
                   return (
-                    <div key={id} className="p-2.5 border border-[#E6E0D5] bg-white rounded-lg flex flex-col gap-2.5 text-xs">
+                    <div key={id} className="p-2.5 border border-emerald-250 bg-emerald-50/10 rounded-lg flex flex-col gap-2.5 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="font-mono text-[11px] font-bold text-neutral-800 truncate block max-w-[130px]">{id}</span>
-                        <div className="flex items-center gap-1.5 text-[9px]">
-                          <span className={`px-1.5 py-0.5 rounded-full font-bold ${srv.enabled !== false ? 'bg-emerald-50 text-emerald-800' : 'bg-neutral-100 text-neutral-500'}`}>
-                            {srv.enabled !== false ? 'Enabled' : 'Disabled'}
+                        <span className="font-mono text-[11px] font-bold text-neutral-800 truncate block max-w-[150px]">{id}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="px-1.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 text-[9px] flex items-center justify-center gap-1 select-none shadow-3xs">
+                            <Check className="w-2.5 h-2.5" /> Connected
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[9px] text-neutral-500 font-bold uppercase font-mono">Bridge/SSE Gateway URL:</span>
-                        <div className="flex gap-1.5">
-                          <input 
-                            type="text"
-                            value={displayUrl}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCustomUrls(prev => ({ ...prev, [id]: val }));
-                            }}
-                            placeholder={srv.command ? "e.g. http://localhost:12121" : "e.g. http://localhost:3000"}
-                            className="flex-1 bg-neutral-50 hover:bg-white focus:bg-white border border-[#EDE8DE] hover:border-[#DEC9B3] rounded p-1 text-[10px] focus:outline-none font-mono"
-                          />
-                          <button
-                            onClick={() => handleTestServer(id, displayUrl)}
-                            disabled={isTesting || !displayUrl}
-                            className="px-2 bg-neutral-900 hover:bg-[#C2410C] text-white rounded text-[10px] font-bold transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center min-w-[55px]"
-                          >
-                            {isTesting ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Connect'}
-                          </button>
+                      <div className="space-y-2 text-[11px] text-neutral-600 font-sans">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[9px] text-neutral-400 font-bold uppercase font-mono">Activation Mode</span>
+                          <span className="text-[10px] font-medium text-neutral-700 font-mono">Standard Stdio Daemon Configuration</span>
                         </div>
-                        {!srv.url && (
-                          <span className="text-[9px] text-[#A16207] leading-normal font-sans bg-[#FFFBEB] p-1.5 border border-[#FDE68A] rounded mt-1 block">
-                            💡 <strong>Local Command (stdio) Detected.</strong> Roblox Studio and cmd.exe cannot run directly in a browser sandbox. Expose it via an HTTP/SSE bridge (e.g., <code>http://localhost:12121</code> or via an ngrok proxy) and paste the address above to enable smart compilation tools!
-                          </span>
+
+                        {srv.command && (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[9px] text-neutral-400 font-bold uppercase font-mono">Process Entrypoint</span>
+                            <code className="text-[9.5px] font-mono bg-neutral-100 border text-neutral-800 p-1 px-1.5 rounded select-all block truncate leading-none">
+                              {srv.command} {srv.args ? srv.args.join(' ') : ''}
+                            </code>
+                          </div>
                         )}
-                      </div>
 
-                      {res && (
-                        <div className={`p-1.5 rounded text-[9px] leading-relaxed font-mono ${res.status === 'success' ? 'bg-emerald-50 border border-emerald-100 text-emerald-800' : res.status === 'error' ? 'bg-rose-50 border border-rose-100 text-rose-800' : 'bg-neutral-50 text-neutral-600'}`}>
-                          {res.msg}
-                          {res.tools && res.tools.length > 0 && (
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {res.tools.slice(0, 3).map((t: any) => (
-                                <span key={t.name} className="px-1 bg-emerald-100 text-emerald-900 rounded font-bold text-[8px]">{t.name}</span>
-                              ))}
-                              {res.tools.length > 3 && (
-                                <span className="text-[8px] text-neutral-500 font-bold">+{res.tools.length - 3} more</span>
-                              )}
-                            </div>
-                          )}
+                        <div className="pt-2 border-t border-dashed border-neutral-200">
+                          <span className="text-[9px] text-neutral-500 font-bold uppercase font-mono block mb-1">Active Roblox Studio Toolset:</span>
+                          <div className="flex flex-wrap gap-1">
+                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_write_script</span>
+                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_create_part</span>
+                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_toolbox_search</span>
+                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_insert_model</span>
+                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_get_workspace</span>
+                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_publish_place</span>
+                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_run_tests</span>
+                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_read_script</span>
+                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_set_property</span>
+                          </div>
                         </div>
-                      )}
+                      </div>
                     </div>
                   );
                 })}
