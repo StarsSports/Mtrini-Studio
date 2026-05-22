@@ -42,11 +42,16 @@ export default function RightDrawer({
   const [parsedServers, setParsedServers] = useState<Record<string, { url: string; enabled: boolean }>>({});
   const [testResults, setTestResults] = useState<Record<string, { status: 'idle' | 'success' | 'error'; msg: string; tools?: any[] }>>({});
 
+  const [customUrls, setCustomUrls] = useState<Record<string, string>>({});
+
   useEffect(() => {
     try {
-      const parsed = JSON.parse(mcpJsonStr);
+      let parsed = JSON.parse(mcpJsonStr);
       // Validate structure roughly
       if (typeof parsed === 'object' && parsed !== null) {
+        if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
+          parsed = parsed.mcpServers;
+        }
         setParsedServers(parsed);
         setJsonError(null);
       } else {
@@ -59,10 +64,14 @@ export default function RightDrawer({
 
   const handleSaveJsonConfig = () => {
     if (jsonError) return;
+    const activeUrl = (Object.entries(parsedServers) as [string, any][]).map(([id, srv]) => {
+      return customUrls[id] !== undefined ? customUrls[id] : (srv.url || '');
+    }).filter(Boolean)[0] || '';
+
     onUpdatePreferences({ 
       mcpConfig: mcpJsonStr,
       // Fallback for older code using single URL
-      mcpServer: (Object.values(parsedServers) as any)[0]?.url || ''
+      mcpServer: activeUrl
     });
   };
 
@@ -484,30 +493,50 @@ export default function RightDrawer({
           {!jsonError && Object.keys(parsedServers).length > 0 && (
             <div className="pt-2 border-t border-[#EDE8DE] space-y-2">
               <span className="text-[9px] font-bold text-neutral-500 font-mono uppercase tracking-wider block">Fleet Endpoints ({Object.keys(parsedServers).length}):</span>
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+              <div className="space-y-3 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
                 {(Object.entries(parsedServers) as [string, any][]).map(([id, srv]) => {
                   const isTesting = connectingKey === id;
                   const res = testResults[id];
+                  const displayUrl = customUrls[id] !== undefined ? customUrls[id] : (srv.url || '');
                   return (
-                    <div key={id} className="p-2 border border-[#E6E0D5] bg-white rounded-lg flex flex-col gap-1.5 text-xs">
+                    <div key={id} className="p-2.5 border border-[#E6E0D5] bg-white rounded-lg flex flex-col gap-2.5 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="font-mono text-[11px] font-bold text-neutral-800 truncate block max-w-[120px]">{id}</span>
-                        <div className="flex items-center gap-1 text-[9px]">
-                          <span className={`px-1.5 py-0.5 rounded-full font-bold ${srv.enabled ? 'bg-emerald-50 text-emerald-800' : 'bg-neutral-100 text-neutral-500'}`}>
-                            {srv.enabled ? 'Enabled' : 'Disabled'}
+                        <span className="font-mono text-[11px] font-bold text-neutral-800 truncate block max-w-[130px]">{id}</span>
+                        <div className="flex items-center gap-1.5 text-[9px]">
+                          <span className={`px-1.5 py-0.5 rounded-full font-bold ${srv.enabled !== false ? 'bg-emerald-50 text-emerald-800' : 'bg-neutral-100 text-neutral-500'}`}>
+                            {srv.enabled !== false ? 'Enabled' : 'Disabled'}
                           </span>
-                          <button
-                            onClick={() => handleTestServer(id, srv.url)}
-                            disabled={isTesting || !srv.url}
-                            className="p-1 hover:bg-[#F2EDE4] rounded transition-all cursor-pointer hover:text-amber-800 disabled:opacity-50"
-                            title="Handshake Server"
-                          >
-                            <RefreshCw className={`w-3 h-3 ${isTesting ? 'animate-spin' : ''}`} />
-                          </button>
                         </div>
                       </div>
-                      <span className="font-mono text-[9px] text-[#a16207] truncate bg-[#FAF9F5] p-1 rounded border border-[#E6E0D5] select-all">{srv.url}</span>
-                      
+
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[9px] text-neutral-500 font-bold uppercase font-mono">Bridge/SSE Gateway URL:</span>
+                        <div className="flex gap-1.5">
+                          <input 
+                            type="text"
+                            value={displayUrl}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCustomUrls(prev => ({ ...prev, [id]: val }));
+                            }}
+                            placeholder={srv.command ? "e.g. http://localhost:12121" : "e.g. http://localhost:3000"}
+                            className="flex-1 bg-neutral-50 hover:bg-white focus:bg-white border border-[#EDE8DE] hover:border-[#DEC9B3] rounded p-1 text-[10px] focus:outline-none font-mono"
+                          />
+                          <button
+                            onClick={() => handleTestServer(id, displayUrl)}
+                            disabled={isTesting || !displayUrl}
+                            className="px-2 bg-neutral-900 hover:bg-[#C2410C] text-white rounded text-[10px] font-bold transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center min-w-[55px]"
+                          >
+                            {isTesting ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Connect'}
+                          </button>
+                        </div>
+                        {!srv.url && (
+                          <span className="text-[9px] text-[#A16207] leading-normal font-sans bg-[#FFFBEB] p-1.5 border border-[#FDE68A] rounded mt-1 block">
+                            💡 <strong>Local Command (stdio) Detected.</strong> Roblox Studio and cmd.exe cannot run directly in a browser sandbox. Expose it via an HTTP/SSE bridge (e.g., <code>http://localhost:12121</code> or via an ngrok proxy) and paste the address above to enable smart compilation tools!
+                          </span>
+                        )}
+                      </div>
+
                       {res && (
                         <div className={`p-1.5 rounded text-[9px] leading-relaxed font-mono ${res.status === 'success' ? 'bg-emerald-50 border border-emerald-100 text-emerald-800' : res.status === 'error' ? 'bg-rose-50 border border-rose-100 text-rose-800' : 'bg-neutral-50 text-neutral-600'}`}>
                           {res.msg}
