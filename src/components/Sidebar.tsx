@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { 
-  MessageSquare, Plus, LogOut, Settings, Award, Terminal, Trash2, Cpu, Sparkles, Laptop, ShieldCheck, FileText
+  MessageSquare, Plus, LogOut, Settings, Award, Terminal, Trash2, Cpu, Sparkles, ShieldCheck, FileText
 } from 'lucide-react';
 import { ChatThread, UserProfile, ThemeColors, ViewType } from '../types';
 
@@ -14,7 +14,6 @@ interface SidebarProps {
   onNewChat: () => void;
   onLogout: () => void;
   onOpenPreferences: () => void;
-  onOpenPremiumHub: () => void;
   onOpenStartMenu: () => void;
   userProfile: UserProfile | null;
   themeColors: ThemeColors;
@@ -30,7 +29,6 @@ export default function Sidebar({
   onNewChat,
   onLogout,
   onOpenPreferences,
-  onOpenPremiumHub,
   onOpenStartMenu,
   userProfile,
   themeColors,
@@ -139,28 +137,11 @@ export default function Sidebar({
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                )}
+                 )}
               </motion.div>
             );
           })
         )}
-      </div>
-
-      {/* Desktop App Download Prompt */}
-      <div className="px-3 pb-2 pt-1 select-none">
-        <button
-          onClick={onOpenPremiumHub}
-          className={`w-full py-2 px-3 border border-neutral-200 ${themeColors.hoverBorder} rounded-xl bg-white hover:bg-neutral-50/50 text-neutral-800 font-bold text-xs transition-all cursor-pointer shadow-3xs flex items-center justify-between group`}
-          title="Download Windows and Mac Desktop Applications"
-        >
-          <div className="flex items-center gap-2">
-            <Laptop className={`w-4 h-4 ${themeColors.text} shrink-0`} />
-            <span className="text-left leading-tight text-neutral-800 group-hover:text-neutral-950 block">Mtrini Desktop</span>
-          </div>
-          <span className={`text-[9px] ${themeColors.text} ${themeColors.bg} group-hover:opacity-90 px-1.5 py-0.5 rounded font-mono uppercase font-bold tracking-tight border ${themeColors.border}`}>
-            Win/Mac
-          </span>
-        </button>
       </div>
 
       {/* Footer Profile Desk */}

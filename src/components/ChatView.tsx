@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Send, Terminal, Square, Award, Cpu, Loader2, Image, Layers, ChevronDown, ChevronRight, Brain, Info, Check, Coins, Lock, Gem, Laptop, Download, Trash2, Plus, Sparkles, Code, Globe
+  Send, Terminal, Square, Award, Cpu, Loader2, Image, Layers, ChevronDown, ChevronRight, Brain, Info, Check, Coins, Lock, Gem, Download, Trash2, Plus, Sparkles, Code, Globe
 } from 'lucide-react';
 import { Message, ThemeColors, UserProfile } from '../types';
 import ArtifactView from './ArtifactView';
@@ -18,7 +18,6 @@ interface ChatViewProps {
   userProfile: UserProfile | null;
   themeColors: ThemeColors;
   onOpenPreferences: () => void;
-  onOpenPremiumHub: () => void;
   selectedModel: 'mtrini_1_0' | 'mtrini_1_1';
   onSelectModel: (model: 'mtrini_1_0' | 'mtrini_1_1') => void;
   selectedThinking: 'fast' | 'deep' | 'short';
@@ -118,7 +117,6 @@ export default function ChatView({
   userProfile,
   themeColors,
   onOpenPreferences,
-  onOpenPremiumHub,
   selectedModel,
   onSelectModel,
   selectedThinking,
@@ -191,7 +189,6 @@ export default function ChatView({
           {messages.length > 0 && <button onClick={onNewChat} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-[11px] font-bold rounded-xl transition-all shadow-3xs duration-150 cursor-pointer"><Plus className="w-3.5 h-3.5" />New Chat</button>}
           {messages.length > 0 && onClearMessages && <button onClick={onClearMessages} className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold rounded-xl transition-all shadow-3xs duration-150 cursor-pointer"><Trash2 className="w-3.5 h-3.5" />Reset</button>}
           {messages.length > 0 && <button onClick={handleExportMarkdown} className={`flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-[11px] font-bold rounded-xl transition-all shadow-3xs duration-150 cursor-pointer`}><Download className="w-3.5 h-3.5" />Export</button>}
-          <button onClick={onOpenPremiumHub} className={`flex items-center gap-1.5 px-3 py-1.5 border border-neutral-200 bg-neutral-100/80 hover:bg-white text-neutral-800 text-[11px] font-bold rounded-xl transition-all shadow-3xs duration-150 cursor-pointer`}><Laptop className={`w-3.5 h-3.5 ${themeColors.text}`} />Desktop</button>
           <button onClick={onOpenPreferences} className={`text-[11px] font-bold border border-neutral-200 bg-white hover:bg-neutral-100 text-neutral-700 px-3 py-1.5 rounded-xl transition-all shadow-3xs duration-150 cursor-pointer`}>Control Desk</button>
         </div>
       </div>

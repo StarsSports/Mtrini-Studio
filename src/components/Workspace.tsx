@@ -21,7 +21,6 @@ interface WorkspaceProps {
   userProfile: UserProfile | null;
   themeColors: ThemeColors;
   onOpenPreferences: () => void;
-  onOpenPremiumHub: () => void;
   // Models and Thinking modes state
   selectedModel: 'mtrini_1_0' | 'mtrini_1_1';
   onSelectModel: (model: 'mtrini_1_0' | 'mtrini_1_1') => void;
@@ -63,7 +62,6 @@ export default function Workspace({
   userProfile,
   themeColors,
   onOpenPreferences,
-  onOpenPremiumHub,
   selectedModel,
   onSelectModel,
   selectedThinking,
@@ -152,7 +150,6 @@ export default function Workspace({
           userProfile={userProfile}
           themeColors={themeColors}
           onOpenPreferences={onOpenPreferences}
-          onOpenPremiumHub={onOpenPremiumHub}
           selectedModel={selectedModel}
           onSelectModel={onSelectModel}
           selectedThinking={selectedThinking}

@@ -75,41 +75,101 @@ export default function RightDrawer({
     }));
 
     try {
-      const response = await fetch('/api/mcp/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
+      let data: any = null;
+      let isConnected = false;
+      let errorMsg = '';
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'connected') {
-          setTestResults(prev => ({
-            ...prev,
-            [key]: { 
-              status: 'success', 
-              msg: `Connected! Found ${data.tools?.length || 0} secure toolsets.`,
-              tools: data.tools || []
-            }
-          }));
-        } else {
-          setTestResults(prev => ({
-            ...prev,
-            [key]: { 
-              status: 'error', 
-              msg: data.message || 'Handshake failed.' 
-            }
-          }));
+      const isLocalhost = url.includes('localhost') || url.includes('127.0.0.1');
+
+      if (isLocalhost) {
+        // Direct client-side handshake bypassing the container backend (which cannot reach user's local machine)
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          
+          let fetched = await fetch(`${url}/tools`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            signal: controller.signal
+          }).catch(async () => {
+            // Retry with POST
+            return await fetch(`${url}/tools`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({}),
+              signal: controller.signal
+            });
+          });
+          
+          clearTimeout(timeoutId);
+
+          if (fetched.ok) {
+            data = await fetched.json();
+            isConnected = true;
+          } else {
+            throw new Error(`Local MCP server returned status ${fetched.status}`);
+          }
+        } catch (localErr: any) {
+          console.warn('Direct local handshake failed, fallback to server probe...', localErr);
+          
+          // Try backend too in case it's tunnel-mapped
+          const response = await fetch('/api/mcp/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+          });
+          
+          if (response.ok) {
+            const resData = await response.json();
+            data = resData;
+            isConnected = resData.status === 'connected';
+            errorMsg = resData.message || '';
+          } else {
+            throw new Error('Localhost connection failed. Make sure Roblox Studio MCP is running on this port, CORS is enabled, or use a secure tunnel (like ngrok/localtunnel).');
+          }
         }
       } else {
-        throw new Error('Connection refused by host port.');
+        // Standard remote or tunnel URL - proxy via our Cloud Run backend
+        const response = await fetch('/api/mcp/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        if (response.ok) {
+          const resData = await response.json();
+          data = resData;
+          isConnected = resData.status === 'connected';
+          errorMsg = resData.message || '';
+        } else {
+          throw new Error('Connection refused by remote host.');
+        }
+      }
+
+      if (isConnected && data) {
+        setTestResults(prev => ({
+          ...prev,
+          [key]: { 
+            status: 'success', 
+            msg: `Connected! Found ${data.tools?.length || 0} active Roblox/toolsets.`,
+            tools: data.tools || []
+          }
+        }));
+      } else {
+        setTestResults(prev => ({
+          ...prev,
+          [key]: { 
+            status: 'error', 
+            msg: errorMsg || (data && data.message) || 'Handshake failed.' 
+          }
+        }));
       }
     } catch (err: any) {
       setTestResults(prev => ({
         ...prev,
         [key]: { 
           status: 'error', 
-          msg: `Bridge failed: ${err.message || err}. Simulated fallback created.` 
+          msg: `Bridge failed: ${err.message || err}. Tip: Ensure CORS is enabled on your local server, or run ngrok to expose your local Roblox MCP.` 
         }
       }));
     } finally {
@@ -358,10 +418,6 @@ export default function RightDrawer({
             <div className="p-1.5 border border-[#EDE8DE] bg-[#FAF9F5] rounded-md flex items-center justify-between">
               <span className="text-neutral-500 font-sans font-semibold">Toggle Settings Drawer</span>
               <span className="bg-white border px-1.5 py-0.5 rounded shadow-3xs font-extrabold text-[#C2410C]">Alt + S</span>
-            </div>
-            <div className="p-1.5 border border-[#EDE8DE] bg-[#FAF9F5] rounded-md flex items-center justify-between">
-              <span className="text-neutral-500 font-sans font-semibold">Desktop Companion Hub</span>
-              <span className="bg-white border px-1.5 py-0.5 rounded shadow-3xs font-extrabold text-[#C2410C]">Alt + H</span>
             </div>
             <div className="p-1.5 border border-[#EDE8DE] bg-[#FAF9F5] rounded-md flex items-center justify-between">
               <span className="text-neutral-500 font-sans font-semibold">Platform Guide Tour</span>

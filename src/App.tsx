@@ -30,7 +30,6 @@ import LoginGate from './components/LoginGate';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
 import RightDrawer from './components/RightDrawer';
-import PremiumHubModal from './components/PremiumHubModal';
 import StartMenuModal from './components/StartMenuModal';
 
 const THEME_COLORS_MAP: Record<string, ThemeColors> = {
@@ -126,7 +125,6 @@ export default function App() {
     streamingRef.current = streaming;
   }, [streaming]);
 
-  const [isPremiumHubOpen, setIsPremiumHubOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type?: 'info' | 'success' } | null>(null);
 
   // Auto clear toast
@@ -511,10 +509,6 @@ export default function App() {
           e.preventDefault();
           setIsPreferencesOpen(prev => !prev);
           setToast({ message: `HotKey: Toggled Control Desk Settings`, type: 'info' });
-        } else if (key === 'h') {
-          e.preventDefault();
-          setIsPremiumHubOpen(prev => !prev);
-          setToast({ message: `HotKey: Toggled Desktop Applications Hub`, type: 'info' });
         } else if (key === 'c') {
           e.preventDefault();
           setIsStartMenuOpen(prev => !prev);
@@ -528,7 +522,6 @@ export default function App() {
       // Escape always closes panels
       if (e.key === 'Escape') {
         setIsPreferencesOpen(false);
-        setIsPremiumHubOpen(false);
         setIsStartMenuOpen(false);
       }
     };
@@ -705,6 +698,19 @@ export default function App() {
       const decoder = new TextDecoder();
       let streamBuffer = '';
 
+      let lastRenderTime = 0;
+      const RENDER_THROTTLE_MS = 60; // Throttles state refreshes to 16Hz for extremely fluid UI-rendering performance without freeze-ups
+
+      const flushToState = (force = false) => {
+        const now = Date.now();
+        if (force || now - lastRenderTime >= RENDER_THROTTLE_MS) {
+          lastRenderTime = now;
+          setMessages((prev) => 
+            prev.map((m) => m.id === draftAssistantId ? { ...m, content: streamContent } : m)
+          );
+        }
+      };
+
       const processSSELine = (line: string) => {
         const trimmed = line.trim();
         if (!trimmed) return;
@@ -719,9 +725,7 @@ export default function App() {
               const chunkText = parsedJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
               if (chunkText) {
                 streamContent += chunkText;
-                setMessages((prev) => 
-                  prev.map((m) => m.id === draftAssistantId ? { ...m, content: streamContent } : m)
-                );
+                flushToState();
               }
             } else {
               if (parsedJson.error) {
@@ -729,9 +733,7 @@ export default function App() {
               }
               if (parsedJson.text) {
                 streamContent += parsedJson.text;
-                setMessages((prev) => 
-                  prev.map((m) => m.id === draftAssistantId ? { ...m, content: streamContent } : m)
-                );
+                flushToState();
               }
             }
           } catch (pErr) {
@@ -900,7 +902,6 @@ RESTRICTIONS:
         onNewChat={handleNewChat}
         onLogout={handleLogout}
         onOpenPreferences={() => setIsPreferencesOpen(true)}
-        onOpenPremiumHub={() => setIsPremiumHubOpen(true)}
         onOpenStartMenu={() => setIsStartMenuOpen(true)}
         userProfile={userProfile}
         themeColors={activeThemeProps}
@@ -919,7 +920,6 @@ RESTRICTIONS:
         userProfile={userProfile}
         themeColors={activeThemeProps}
         onOpenPreferences={() => setIsPreferencesOpen(true)}
-        onOpenPremiumHub={() => setIsPremiumHubOpen(true)}
         selectedModel={selectedModel}
         onSelectModel={setSelectedModel}
         selectedThinking={selectedThinking}
@@ -949,16 +949,6 @@ RESTRICTIONS:
               onUpdateApiKey={handleUpdateApiKey}
             />
           </>
-        )}
-      </AnimatePresence>
-
-      {/* 4. Interactive premium plan and credits configuration Modal desk */}
-      <AnimatePresence>
-        {isPremiumHubOpen && (
-          <PremiumHubModal
-            onClose={() => setIsPremiumHubOpen(false)}
-            userProfile={userProfile}
-          />
         )}
       </AnimatePresence>
 
