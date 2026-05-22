@@ -40,6 +40,50 @@ app.get('/api/download/applet', (req, res) => {
   res.status(404).json({ error: 'Downloads are currently unavailable.' });
 });
 
+// API Route: Download Mtrini Desktop executable/binary wrappers
+app.get('/api/download/mtrini', (req, res) => {
+  let platform = req.query.platform as string;
+  if (!platform) {
+    // Detect platform via User-Agent
+    const ua = (req.headers['user-agent'] || '').toLowerCase();
+    if (ua.includes('mac')) {
+      platform = 'mac-silicon'; // Default to modern macOS Silicon (M1/M2/M3/M4)
+    } else {
+      platform = 'windows';
+    }
+  }
+
+  let fileName = '';
+  let filePath = '';
+
+  if (platform === 'windows') {
+    fileName = 'Mtrini_Desktop_1.1.exe';
+    filePath = path.join(process.cwd(), 'Mtrini_Desktop_1.1.exe');
+  } else if (platform === 'mac-silicon') {
+    fileName = 'Mtrini_Mac_Silicon';
+    filePath = path.join(process.cwd(), 'Mtrini_Mac_Silicon');
+  } else if (platform === 'mac-intel') {
+    fileName = 'Mtrini_Mac_Intel';
+    filePath = path.join(process.cwd(), 'Mtrini_Mac_Intel');
+  } else {
+    fileName = 'Mtrini_Desktop_1.1.exe';
+    filePath = path.join(process.cwd(), 'Mtrini_Desktop_1.1.exe');
+  }
+
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, fileName, (err) => {
+      if (err) {
+        console.error(`Failed to download file ${fileName}:`, err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'File transfer failed.' });
+        }
+      }
+    });
+  } else {
+    res.status(404).json({ error: `Pre-compiled binary for platform "${platform}" was not found on the server.` });
+  }
+});
+
 // API Route: MCP Scan and Probe
 app.post('/api/mcp/scan', async (req, res) => {
   const { url } = req.body;

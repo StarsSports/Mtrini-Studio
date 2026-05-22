@@ -655,19 +655,41 @@ export default function App() {
 
       if (response && !response.ok) {
         const errorText = await response.text();
-        const isStaticHost404 = response.status === 404 || 
-                                errorText.includes('<!DOCTYPE html>') || 
-                                errorText.includes('Page not found') || 
-                                errorText.includes('Netlify');
-        
-        if (isStaticHost404) {
+        let parsedErrorMsg = '';
+        let isJson = false;
+
+        try {
+          const parsed = JSON.parse(errorText);
+          parsedErrorMsg = parsed.error || parsed.message || '';
+          isJson = true;
+        } catch (e) {
+          // Not JSON (could be raw text or HTML error from Cloud Run / static hosting)
+        }
+
+        if (isJson && parsedErrorMsg) {
           if (localApiKey?.trim()) {
             isFallback = true;
           } else {
-            throw new Error('This app is deployed on a static provider (like Netlify) without an Express backend. To enable streaming AI responses here, please add your own Gemini API Key in the Control Desk settings under "Bridge Tunnel Override".');
+            throw new Error(parsedErrorMsg);
           }
         } else {
-          throw new Error(errorText || 'Server linking failed.');
+          const isStaticOrOffline = response.status === 404 || response.status === 502 || response.status === 503 ||
+                                    errorText.includes('<!DOCTYPE html>') || 
+                                    errorText.includes('Page not found') || 
+                                    errorText.includes('Netlify') ||
+                                    errorText.includes('Service Unavailable');
+          
+          if (isStaticOrOffline && localApiKey?.trim()) {
+            isFallback = true;
+          } else if (isStaticOrOffline) {
+            throw new Error('Could not connect to the Express server. Received an HTML response page (this occurs if the server is offline, cold-starting, or is deployed on a static hosting provider without backend support). To enable AI responses here, please add your own Gemini API Key in the Control Desk settings under "Bridge Tunnel Override" to execute requests directly from your browser.');
+          } else {
+            if (localApiKey?.trim()) {
+              isFallback = true;
+            } else {
+              throw new Error(errorText || `Server returned status ${response.status}`);
+            }
+          }
         }
       }
 
