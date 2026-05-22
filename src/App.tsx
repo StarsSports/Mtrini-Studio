@@ -22,7 +22,7 @@ import {
 } from 'firebase/firestore';
 
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
-import { ChatThread, Message, UserProfile, ThemeColors } from './types';
+import { ChatThread, Message, UserProfile, ThemeColors, ViewType } from './types';
 import { Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -99,6 +99,7 @@ export default function App() {
 
   // Subordinated App states
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [activeView, setActiveView] = useState<ViewType>('chat');
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -626,30 +627,53 @@ export default function App() {
     setMessages((prev) => [...prev, draftMessage]);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedHistory.map(m => ({ role: m.role, content: m.content })),
-          selectedTheme: userProfile.themeColor,
-          mcpUrl: userProfile.mcpServer || '',
-          selectedModel,
-          selectedThinking,
-          localApiKey
-        }),
-        signal: controller.signal
-      });
+      let response: Response | null = null;
+      let isFallback = false;
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Server linking failed.');
+      try {
+        response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: updatedHistory.map(m => ({ role: m.role, content: m.content })),
+            selectedTheme: userProfile.themeColor,
+            mcpUrl: userProfile.mcpServer || '',
+            selectedModel,
+            selectedThinking,
+            localApiKey
+          }),
+          signal: controller.signal
+        });
+      } catch (netErr) {
+        // Network error - likely no backend (e.g., direct static deployment)
+        if (localApiKey?.trim()) {
+          isFallback = true;
+        } else {
+          throw new Error('Could not connect to the backend AI engine. Since you are in a static environments (like Netlify), please specify active credentials in the Control Desk ("Bridge Tunnel Override" setting).');
+        }
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('Could not establish streaming channel.');
+      if (response && !response.ok) {
+        const errorText = await response.text();
+        const isStaticHost404 = response.status === 404 || 
+                                errorText.includes('<!DOCTYPE html>') || 
+                                errorText.includes('Page not found') || 
+                                errorText.includes('Netlify');
+        
+        if (isStaticHost404) {
+          if (localApiKey?.trim()) {
+            isFallback = true;
+          } else {
+            throw new Error('This app is deployed on a static provider (like Netlify) without an Express backend. To enable streaming AI responses here, please add your own Gemini API Key in the Control Desk settings under "Bridge Tunnel Override".');
+          }
+        } else {
+          throw new Error(errorText || 'Server linking failed.');
+        }
+      }
 
-      const decoder = new TextDecoder();
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
       let streamContent = '';
+      const decoder = new TextDecoder();
       let streamBuffer = '';
 
       const processSSELine = (line: string) => {
@@ -662,21 +686,75 @@ export default function App() {
           }
           try {
             const parsedJson = JSON.parse(dataStr);
-            if (parsedJson.error) {
-              throw new Error(parsedJson.error);
-            }
-            if (parsedJson.text) {
-              streamContent += parsedJson.text;
-              // Batch up progress
-              setMessages((prev) => 
-                prev.map((m) => m.id === draftAssistantId ? { ...m, content: streamContent } : m)
-              );
+            if (isFallback) {
+              const chunkText = parsedJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              if (chunkText) {
+                streamContent += chunkText;
+                setMessages((prev) => 
+                  prev.map((m) => m.id === draftAssistantId ? { ...m, content: streamContent } : m)
+                );
+              }
+            } else {
+              if (parsedJson.error) {
+                throw new Error(parsedJson.error);
+              }
+              if (parsedJson.text) {
+                streamContent += parsedJson.text;
+                setMessages((prev) => 
+                  prev.map((m) => m.id === draftAssistantId ? { ...m, content: streamContent } : m)
+                );
+              }
             }
           } catch (pErr) {
             // Ignore partial logs JSON parse issues during stream chunks split
           }
         }
       };
+
+      if (isFallback && localApiKey?.trim()) {
+        const modelName = selectedModel === 'mtrini_1_1' ? 'gemini-3.1-pro-preview' : 'gemini-3.5-flash';
+        const systemPrompt = `You are "Mtrini 1.0", a premium, top-tier Senior Developer AI Engine specializing in high-fidelity full-stack web applications and complex system scripting. 
+YOUR OBJECTIVES:
+1. Generate clean, modular, production-grade code adhering to modern TypeScript, React, and Tailwind best practices.
+2. Prioritize architectural efficiency: avoid over-engineering, ensure strict adherence to single-responsibility principles, and proactively minimize complexity.
+3. Be concise. Deliver objective, technical, and actionable responses.
+RESTRICTIONS:
+- DO NOT USE EMOJIS. Strict prohibition.
+- Only output essential, context-rich prose.
+- Output substantial code inside [ARTIFACT title="..." language="..."]CODE[/ARTIFACT] blocks. 
+- You are a Moroccan-born master craftsman in digital architecture: precision, efficiency, and structural integrity are your hallmarks.`;
+
+        const geminiContents = updatedHistory.map(m => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }]
+        }));
+
+        const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${localApiKey.trim()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: geminiContents,
+            systemInstruction: {
+              parts: [{ text: systemPrompt }]
+            },
+            generationConfig: {
+              temperature: selectedThinking === 'short' ? 0.2 : 0.7
+            }
+          }),
+          signal: controller.signal
+        });
+
+        if (!geminiResponse.ok) {
+          const gErrText = await geminiResponse.text();
+          throw new Error(`Direct Gemini API connection failed: ${gErrText}`);
+        }
+
+        reader = geminiResponse.body?.getReader();
+      } else if (response) {
+        reader = response.body?.getReader();
+      }
+
+      if (!reader) throw new Error('Could not establish streaming channel.');
 
       while (true) {
         const { value, done } = await reader.read();
@@ -775,7 +853,9 @@ export default function App() {
       <Sidebar
         chatThreads={chatThreads}
         activeChatId={activeChatId}
+        activeView={activeView}
         onSelectChat={setActiveChatId}
+        onSelectView={setActiveView}
         onNewChat={handleNewChat}
         onLogout={handleLogout}
         onOpenPreferences={() => setIsPreferencesOpen(true)}
@@ -789,6 +869,7 @@ export default function App() {
       {/* 2. Central Dual Panel Workspace System */}
       <Workspace
         onNewChat={handleNewChat}
+        activeView={activeView}
         messages={messages}
         activeChatId={activeChatId}
         onSendMessage={handleSendMessage}

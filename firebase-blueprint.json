@@ -41,7 +41,19 @@
         "artifactType": { "type": "string" }
       },
       "required": ["role", "content", "createdAt"]
-    }
+    },
+    "Note": {
+      "title": "Project Note",
+      "description": "User notes for projects",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "userId", "createdAt", "updatedAt"]
   },
   "firestore": {
     "/users/{userId}": {
@@ -55,6 +67,10 @@
     "/chats/{chatId}/messages/{messageId}": {
       "schema": "Message",
       "description": "Individual messages within a chat thread"
+    },
+    "/users/{userId}/notes/{noteId}": {
+      "schema": "Note",
+      "description": "User project notes"
     }
   }
 }

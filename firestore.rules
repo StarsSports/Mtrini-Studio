@@ -58,11 +58,25 @@ service cloud.firestore {
         && (data.get('artifactType', null) == null || (data.get('artifactType', null) is string && data.get('artifactType', null).size() <= 100));
     }
 
+    function isValidNote(data) {
+      return data.title is string && data.title.size() <= 200
+        && data.content is string && data.content.size() <= 100000
+        && data.userId is string && data.userId.size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     // Collection matches
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().createdAt == request.time;
       allow update: if isOwner(userId) && isValidUser(incoming()) && incoming().createdAt == existing().createdAt;
+    }
+
+    match /users/{userId}/notes/{noteId} {
+      allow get, list, delete: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(noteId) && incoming().userId == userId && isValidNote(incoming()) && incoming().createdAt == request.time;
+      allow update: if isOwner(userId) && incoming().userId == userId && isValidNote(incoming()) && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
     }
 
     match /chats/{chatId} {

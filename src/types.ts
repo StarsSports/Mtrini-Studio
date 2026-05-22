@@ -14,6 +14,17 @@ export interface UserProfile {
   createdAt: Date;
 }
 
+export type ViewType = 'chat' | 'notes';
+
+export interface ProjectNote {
+  id: string;
+  title: string;
+  content: string;
+  userId: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
 export interface ChatThread {
   id: string;
   title: string;

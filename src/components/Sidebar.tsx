@@ -1,14 +1,16 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { 
-  MessageSquare, Plus, LogOut, Settings, Award, Terminal, Trash2, Cpu, Sparkles, Laptop, ShieldCheck
+  MessageSquare, Plus, LogOut, Settings, Award, Terminal, Trash2, Cpu, Sparkles, Laptop, ShieldCheck, FileText
 } from 'lucide-react';
-import { ChatThread, UserProfile, ThemeColors } from '../types';
+import { ChatThread, UserProfile, ThemeColors, ViewType } from '../types';
 
 interface SidebarProps {
   chatThreads: ChatThread[];
   activeChatId: string | null;
+  activeView: ViewType;
   onSelectChat: (id: string) => void;
+  onSelectView: (view: ViewType) => void;
   onNewChat: () => void;
   onLogout: () => void;
   onOpenPreferences: () => void;
@@ -22,7 +24,9 @@ interface SidebarProps {
 export default function Sidebar({
   chatThreads,
   activeChatId,
+  activeView,
   onSelectChat,
+  onSelectView,
   onNewChat,
   onLogout,
   onOpenPreferences,
@@ -77,9 +81,21 @@ export default function Sidebar({
 
       {/* Threads Section */}
       <div className="px-4 py-2 mt-2 text-[10px] font-bold tracking-wider text-neutral-500 uppercase flex items-center justify-between">
-        <span>Recent Chats</span>
+        <div className="flex items-center gap-2">
+           <button 
+             onClick={() => onSelectView('chat')}
+             className={activeView === 'chat' ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-900'}>
+              Recent Chats
+           </button>
+           <span className="text-neutral-300">/</span>
+           <button 
+             onClick={() => onSelectView('notes')}
+             className={activeView === 'notes' ? 'text-neutral-900' : 'text-neutral-500 hover:text-neutral-900'}>
+              Notes
+           </button>
+        </div>
         <span className="text-[9px] font-bold bg-neutral-200 text-neutral-600 px-1.5 py-0.5 rounded">
-          {chatThreads.length}
+          {activeView === 'chat' ? chatThreads.length : '...'}
         </span>
       </div>
 
