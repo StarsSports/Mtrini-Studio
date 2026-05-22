@@ -35,10 +35,10 @@ export default function Sidebar({
   const isPremium = userProfile?.isPremiumActive ?? false;
 
   return (
-    <div className="w-64 bg-[#EFECE6] border-r border-[#DEC9B3]/40 flex flex-col h-full font-sans select-none z-20 shrink-0 text-neutral-800">
+    <div className="w-64 bg-neutral-100 border-r border-neutral-300 flex flex-col h-full font-sans select-none z-20 shrink-0 text-neutral-800">
       
       {/* App Header Banner */}
-      <div className="p-4 border-b border-[#E6DCD0] flex flex-col gap-2.5 bg-[#EAE4D9]">
+      <div className="p-4 border-b border-neutral-200 flex flex-col gap-2.5 bg-neutral-200">
         <div className="flex items-center gap-2">
           <div className={`p-2 rounded-xl ${themeColors.bg} border ${themeColors.border} flex items-center justify-center shadow-xs`}>
             <Terminal className={`w-4 h-4 ${themeColors.text}`} />
@@ -55,7 +55,7 @@ export default function Sidebar({
       </div>
 
       {/* Primary Action Buttons */}
-      <div className="px-3 pb-2 flex gap-1.5">
+      <div className="px-3 pb-2 flex gap-1.5 pt-3">
         <button
           onClick={onNewChat}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold ${themeColors.primary} transition-all cursor-pointer active:scale-98`}
@@ -66,7 +66,7 @@ export default function Sidebar({
         </button>
         <button
           onClick={onOpenStartMenu}
-          className={`py-2 px-2.5 bg-white border border-[#E6DCD0] hover:bg-[#FAF8F5] text-neutral-800 rounded-xl text-xs font-bold transition-all ${themeColors.hoverBorder} flex items-center justify-center gap-1 cursor-pointer shadow-3xs`}
+          className={`py-2 px-2.5 bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-800 rounded-xl text-xs font-bold transition-all ${themeColors.hoverBorder} flex items-center justify-center gap-1 cursor-pointer shadow-3xs`}
           title="Onboarding & Start Guide Menu"
           id="btn-start-guide-sidebar"
         >
@@ -76,9 +76,9 @@ export default function Sidebar({
       </div>
 
       {/* Threads Section */}
-      <div className="px-4 py-2 mt-2 text-[10px] font-bold tracking-wider text-[#8C7B65] uppercase flex items-center justify-between">
+      <div className="px-4 py-2 mt-2 text-[10px] font-bold tracking-wider text-neutral-500 uppercase flex items-center justify-between">
         <span>Recent Chats</span>
-        <span className="text-[9px] font-bold bg-[#E6DCD0] text-[#5C4F3E] px-1.5 py-0.5 rounded">
+        <span className="text-[9px] font-bold bg-neutral-200 text-neutral-600 px-1.5 py-0.5 rounded">
           {chatThreads.length}
         </span>
       </div>
@@ -103,10 +103,10 @@ export default function Sidebar({
                 <button
                   type="button"
                   onClick={() => onSelectChat(thread.id)}
-                  className={`flex-1 text-left p-2.5 rounded-lg text-xs font-medium tracking-wide flex items-center gap-2 transition-all cursor-pointer ${isActive ? 'bg-white text-neutral-950 border border-[#E6DCD0] font-bold shadow-3xs pr-8' : 'text-neutral-600 hover:bg-white/50 hover:text-neutral-950 pr-8'}`}
+                  className={`flex-1 text-left p-2.5 rounded-lg text-xs font-medium tracking-wide flex items-center gap-2 transition-all cursor-pointer ${isActive ? 'bg-white text-neutral-950 border border-neutral-200 font-bold shadow-3xs pr-8' : 'text-neutral-600 hover:bg-white/50 hover:text-neutral-950 pr-8'}`}
                   id={`thread-item-${thread.id}`}
                 >
-                  <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-amber-805 text-amber-700' : 'text-neutral-400 group-hover/item:text-neutral-500'}`} />
+                  <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-neutral-700' : 'text-neutral-400 group-hover/item:text-neutral-500'}`} />
                   <span className="truncate flex-1 pr-1">{thread.title}</span>
                 </button>
                 {onDeleteChat && (
@@ -118,7 +118,7 @@ export default function Sidebar({
                         onDeleteChat(thread.id);
                       }
                     }}
-                    className="absolute right-2 opacity-0 group-hover/item:opacity-100 p-1 hover:bg-[#FAF8F5] rounded text-neutral-400 hover:text-rose-600 transition-all cursor-pointer"
+                    className="absolute right-2 opacity-0 group-hover/item:opacity-100 p-1 hover:bg-neutral-100 rounded text-neutral-400 hover:text-rose-600 transition-all cursor-pointer"
                     title="Delete session thread"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -134,7 +134,7 @@ export default function Sidebar({
       <div className="px-3 pb-2 pt-1 select-none">
         <button
           onClick={onOpenPremiumHub}
-          className={`w-full py-2 px-3 border border-[#DEC9B3]/70 ${themeColors.hoverBorder} rounded-xl bg-white hover:bg-neutral-50/50 text-neutral-800 font-bold text-xs transition-all cursor-pointer shadow-3xs flex items-center justify-between group`}
+          className={`w-full py-2 px-3 border border-neutral-200 ${themeColors.hoverBorder} rounded-xl bg-white hover:bg-neutral-50/50 text-neutral-800 font-bold text-xs transition-all cursor-pointer shadow-3xs flex items-center justify-between group`}
           title="Download Windows and Mac Desktop Applications"
         >
           <div className="flex items-center gap-2">
@@ -148,15 +148,15 @@ export default function Sidebar({
       </div>
 
       {/* Footer Profile Desk */}
-      <div className="p-3 bg-[#E5DCD0]/60 border-t border-[#DEC9B3]/40 flex flex-col gap-2.5">
-        <div className="flex items-center gap-2.5 bg-white/80 p-2 rounded-xl border border-[#DEC9B3]/35 shadow-3xs">
+      <div className="p-3 bg-neutral-200/60 border-t border-neutral-200 flex flex-col gap-2.5">
+        <div className="flex items-center gap-2.5 bg-white/80 p-2 rounded-xl border border-neutral-200 shadow-3xs">
           
           <div className="relative shrink-0">
             <img 
               src={userProfile?.avatarUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=80&q=80"} 
               alt="Avatar" 
               referrerPolicy="no-referrer"
-              className="w-8 h-8 rounded-lg object-cover border border-[#DDD5C5]"
+              className="w-8 h-8 rounded-lg object-cover border border-neutral-200"
             />
             <span className="absolute bottom-[-1px] right-[-1px] w-2.5 h-2.5 bg-emerald-600 rounded-full border border-white" />
           </div>
@@ -175,7 +175,7 @@ export default function Sidebar({
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={onOpenPreferences}
-            className="flex items-center justify-center gap-1.5 py-1.5 bg-white hover:bg-[#FAF8F5] border border-[#DEC9B3]/40 rounded-lg text-[10px] font-bold text-neutral-700 transition-all cursor-pointer shadow-3xs hover:text-neutral-900"
+            className="flex items-center justify-center gap-1.5 py-1.5 bg-white hover:bg-neutral-100 border border-neutral-200 rounded-lg text-[10px] font-bold text-neutral-700 transition-all cursor-pointer shadow-3xs hover:text-neutral-900"
             id="sidebar-settings-btn"
           >
             <Settings className="w-3 h-3 text-neutral-500" />
@@ -184,7 +184,7 @@ export default function Sidebar({
           
           <button
             onClick={onLogout}
-            className="flex items-center justify-center gap-1.5 py-1.5 hover:bg-[#FAF8F5]/80 text-neutral-500 hover:text-rose-700 border border-transparent hover:border-rose-100 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+            className="flex items-center justify-center gap-1.5 py-1.5 hover:bg-neutral-100/80 text-neutral-500 hover:text-rose-700 border border-transparent hover:border-rose-100 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
             id="sidebar-logout-btn"
           >
             <LogOut className="w-3 h-3" />

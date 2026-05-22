@@ -770,7 +770,7 @@ export default function App() {
   const activeThemeProps = THEME_COLORS_MAP[userProfile.themeColor] || THEME_COLORS_MAP.cyan;
 
   return (
-    <div className="h-screen w-screen bg-[#FAF8F5] text-neutral-800 overflow-hidden flex flex-row selection:bg-amber-100 selection:text-neutral-900">
+    <div className="h-screen w-screen bg-neutral-50 text-neutral-900 overflow-hidden flex flex-row selection:bg-neutral-200 selection:text-neutral-950">
       {/* 1. Left Navigation System Panel */}
       <Sidebar
         chatThreads={chatThreads}
@@ -788,6 +788,7 @@ export default function App() {
 
       {/* 2. Central Dual Panel Workspace System */}
       <Workspace
+        onNewChat={handleNewChat}
         messages={messages}
         activeChatId={activeChatId}
         onSendMessage={handleSendMessage}
@@ -859,9 +860,9 @@ export default function App() {
             initial={{ opacity: 0, y: 15, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-[#FAF8F5] border border-[#DEC9B3] text-neutral-900 rounded-xl shadow-xl flex items-center gap-2.5 font-sans font-bold text-xs"
+            className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-white border border-neutral-200 text-neutral-900 rounded-xl shadow-xl flex items-center gap-2.5 font-sans font-bold text-xs"
           >
-            <div className={`w-2 h-2 rounded-full ${toast.type === 'success' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-pulse'}`} />
+            <div className={`w-2 h-2 rounded-full ${toast.type === 'success' ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-500 animate-pulse'}`} />
             <span>{toast.message}</span>
           </motion.div>
         )}

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Send, Terminal, Square, Award, Cpu, Loader2, Sparkles, Layers, ChevronDown, ChevronRight, HelpCircle, Brain, Info, Check, Coins, Lock, Gem, Laptop, Download, Trash2
+  Send, Terminal, Square, Award, Cpu, Loader2, Image, Layers, ChevronDown, ChevronRight, HelpCircle, Brain, Info, Check, Coins, Lock, Gem, Laptop, Download, Trash2, Plus
 } from 'lucide-react';
 import { Message, ThemeColors, UserProfile } from '../types';
 import ArtifactView from './ArtifactView';
@@ -9,6 +9,7 @@ import { parseMessageArtifacts } from '../utils';
 import StreamingThinkingIndicator from './StreamingThinkingIndicator';
 
 interface WorkspaceProps {
+  onNewChat: () => void;
   messages: Message[];
   activeChatId: string | null;
   onSendMessage: (content: string) => void;
@@ -49,6 +50,7 @@ function parseMessageThoughts(content: string): ParsedThought {
 }
 
 export default function Workspace({
+  onNewChat,
   messages,
   activeChatId,
   onSendMessage,
@@ -85,10 +87,6 @@ export default function Workspace({
   const handleApplyPreset = (prompt: string) => {
     setInputValue(prompt);
   };
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streaming]);
 
   // Clear active artifact view when changing chat threads
   useEffect(() => {
@@ -136,17 +134,17 @@ export default function Workspace({
   const activeArtifact = activeMessage ? parseMessageArtifacts(activeMessage.content) : null;
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-[#FAF8F5] font-sans h-full text-neutral-800">
+    <div className="flex-1 flex overflow-hidden bg-neutral-50 font-sans h-full text-neutral-900">
       
       {/* Central Chat Stream */}
       <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeArtifact ? (isArtifactExpanded ? 'max-w-0 opacity-0 pointer-events-none' : 'max-w-[55%] md:max-w-[50%]') : 'w-full'} transition-all duration-300`}>
         
         {/* Dynamic Studio Header Desk */}
-        <div className="h-14 border-b border-[#E6DCD0] px-4 bg-[#FAF8F5] flex items-center justify-between shrink-0 select-none shadow-3xs z-10">
-          <div className="flex items-center gap-2">
+        <div className="h-14 border-b border-neutral-200 px-4 bg-neutral-50 flex items-center justify-between shrink-0 select-none shadow-3xs z-10">
+              <div className="flex items-center gap-2">
             <Cpu className={`w-4.5 h-4.5 ${themeColors.text}`} />
             <div className="flex flex-col">
-              <span className="text-xs font-display font-extrabold tracking-tight uppercase text-neutral-900">
+              <span className="text-xs font-display font-extrabold tracking-tight uppercase text-neutral-950">
                 Mtrini Code Studio
               </span>
               <span className="text-[10px] text-neutral-500 font-medium font-sans">Workspace Active</span>
@@ -154,12 +152,24 @@ export default function Workspace({
           </div>
           
           <div className="flex items-center gap-2">
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={onNewChat}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs"
+                title="Start a new chat session"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Chat</span>
+              </button>
+            )}
+
             {/* Clear Sandbox / Messages */}
             {messages.length > 0 && onClearMessages && (
               <button
                 type="button"
                 onClick={onClearMessages}
-                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-rose-50 border border-rose-250 hover:border-rose-450 text-rose-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-rose-50 border border-rose-200 hover:border-rose-300 text-rose-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs"
                 title="Reset this sandbox conversation"
               >
                 <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-500" />
@@ -172,7 +182,7 @@ export default function Workspace({
               <button
                 type="button"
                 onClick={handleExportMarkdown}
-                className={`flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#DEC9B3] ${themeColors.hoverBorder} hover:bg-neutral-50 text-neutral-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-200 ${themeColors.hoverBorder} hover:bg-neutral-100 text-neutral-700 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs`}
                 title="Export entire interview as markdown"
               >
                 <Download className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
@@ -183,7 +193,7 @@ export default function Workspace({
              {/* Desktop companion apps trigger */}
             <button
               onClick={onOpenPremiumHub}
-              className={`flex items-center gap-1.5 px-3 py-1.5 border border-[#DEC9B3] ${themeColors.hoverBorder} bg-[#FAF9F5]/80 hover:bg-white text-neutral-800 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 border border-neutral-200 ${themeColors.hoverBorder} bg-neutral-100/80 hover:bg-white text-neutral-800 text-[11px] font-bold rounded-xl transition-all cursor-pointer shadow-3xs`}
               title="Download standalone cross-platform desktop client"
             >
               <Laptop className={`w-3.5 h-3.5 ${themeColors.text} shrink-0`} />
@@ -192,7 +202,7 @@ export default function Workspace({
 
             <button
               onClick={onOpenPreferences}
-              className={`text-[11px] font-bold border border-[#DEC9B3] ${themeColors.hoverBorder} bg-white hover:bg-neutral-50 text-neutral-700 hover:text-neutral-950 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-3xs`}
+              className={`text-[11px] font-bold border border-neutral-200 ${themeColors.hoverBorder} bg-white hover:bg-neutral-100 text-neutral-700 hover:text-neutral-950 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-3xs`}
             >
               Control Desk
             </button>
@@ -200,7 +210,7 @@ export default function Workspace({
         </div>
 
         {/* Message Feeds Container */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar bg-[#FAF8F5]">
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar bg-neutral-50">
           {messages.length === 0 ? (
             <motion.div 
               initial={{ opacity: 0, y: 15 }}
@@ -236,7 +246,7 @@ export default function Workspace({
                 initial={{ y: 12, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.16, duration: 0.25 }}
-                className="w-full bg-white border border-[#E6DCD0] rounded-xl p-4.5 text-left space-y-3 shadow-3xs" 
+                className="w-full bg-white border border-neutral-200 rounded-xl p-4.5 text-left space-y-3 shadow-3xs" 
                 id="capabilities-card"
               >
                 <div className="flex items-center gap-2 text-xs font-bold text-neutral-900 uppercase tracking-wide">
@@ -253,10 +263,10 @@ export default function Workspace({
                     <button
                       type="button"
                       onClick={() => handleApplyPreset("Generate a fully interactive Starfield canvas simulator in HTML and CSS with particle physics, multiple stars speed tiers, and adjustable warp controls.")}
-                      className="p-3 border border-[#EDE8DE] rounded-xl bg-[#FAF9F5] hover:bg-white text-left hover:border-[#DEC9B3] transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
+                      className="p-3 border border-neutral-200 rounded-xl bg-neutral-50 hover:bg-white text-left hover:border-neutral-300 transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
                     >
                       <span className="font-bold text-neutral-950 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-orange-700 animate-pulse" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-neutral-600 animate-pulse" />
                         1. Canvas Starfield Warp Simulator
                       </span>
                       <span className="text-[9.5px] text-neutral-500 leading-normal">High-performance custom particle graphics inside responsive containers.</span>
@@ -265,10 +275,10 @@ export default function Workspace({
                     <button
                       type="button"
                       onClick={() => handleApplyPreset("Write a robust event-driven Roblox Luau core server framework. Implement secure memory garbage collection streams and custom Dispatcher events.")}
-                      className="p-3 border border-[#EDE8DE] rounded-xl bg-[#FAF9F5] hover:bg-white text-left hover:border-[#DEC9B3] transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
+                      className="p-3 border border-neutral-200 rounded-xl bg-neutral-50 hover:bg-white text-left hover:border-neutral-300 transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
                     >
                       <span className="font-bold text-neutral-950 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-neutral-600 animate-pulse" />
                         2. Roblox Luau Dispatcher Framework
                       </span>
                       <span className="text-[9.5px] text-neutral-500 leading-normal">Advanced garbage-collected custom Roblox backend architecture module.</span>
@@ -277,10 +287,10 @@ export default function Workspace({
                     <button
                       type="button"
                       onClick={() => handleApplyPreset("Build an elegant, fully responsive Stock Market Trading Simulator widget with interactive charts, mock symbols buy/sell logs, and dynamic filter tags.")}
-                      className="p-3 border border-[#EDE8DE] rounded-xl bg-[#FAF9F5] hover:bg-white text-left hover:border-[#DEC9B3] transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
+                      className="p-3 border border-neutral-200 rounded-xl bg-neutral-50 hover:bg-white text-left hover:border-neutral-300 transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
                     >
                       <span className="font-bold text-neutral-950 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-neutral-600 animate-pulse" />
                         3. stock-trade-simulator.tsx
                       </span>
                       <span className="text-[9.5px] text-neutral-500 leading-normal">Elegant KPI scorecard panel containing beautiful sparkline plots.</span>
@@ -289,10 +299,10 @@ export default function Workspace({
                     <button
                       type="button"
                       onClick={() => handleApplyPreset("Create an elegant Algorithmic Sorting Visualizer using HTML Canvas for sorting algorithms (Bubble, Quick, Merge). Include speed slider and array size triggers.")}
-                      className="p-3 border border-[#EDE8DE] rounded-xl bg-[#FAF9F5] hover:bg-white text-left hover:border-[#DEC9B3] transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
+                      className="p-3 border border-neutral-200 rounded-xl bg-neutral-50 hover:bg-white text-left hover:border-neutral-300 transition-colors cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs"
                     >
                       <span className="font-bold text-neutral-950 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-neutral-600 animate-pulse" />
                         4. sorting-visualizer.js
                       </span>
                       <span className="text-[9.5px] text-neutral-500 leading-normal">Interactive educational simulator to observe algorithms sorting in real-time.</span>
@@ -329,7 +339,7 @@ export default function Workspace({
                     onClick={() => {
                       window.location.href = '/api/download/mtrini?platform=windows';
                     }}
-                    className="p-3 border border-[#EDE8DE] hover:border-[#DEC9B3] rounded-lg bg-[#FAF9F5] hover:bg-white text-left transition-all cursor-pointer group flex items-center justify-between shadow-3xs"
+                    className="p-3 border border-neutral-200 hover:border-neutral-300 rounded-lg bg-neutral-50 hover:bg-white text-left transition-all cursor-pointer group flex items-center justify-between shadow-3xs"
                   >
                     <div className="flex flex-col gap-0.5 min-w-0">
                       <span className="font-bold text-neutral-900 text-xs">Windows x64</span>
@@ -343,7 +353,7 @@ export default function Workspace({
                     onClick={() => {
                       window.location.href = '/api/download/mtrini?platform=macos-silicon';
                     }}
-                    className="p-3 border border-[#EDE8DE] hover:border-[#DEC9B3] rounded-lg bg-[#FAF9F5] hover:bg-white text-left transition-all cursor-pointer group flex items-center justify-between shadow-3xs"
+                    className="p-3 border border-neutral-200 hover:border-neutral-300 rounded-lg bg-neutral-50 hover:bg-white text-left transition-all cursor-pointer group flex items-center justify-between shadow-3xs"
                   >
                     <div className="flex flex-col gap-0.5 min-w-0">
                       <span className="font-bold text-neutral-900 text-xs">macOS M1/M2/M3</span>
@@ -357,7 +367,7 @@ export default function Workspace({
                     onClick={() => {
                       window.location.href = '/api/download/mtrini?platform=macos-intel';
                     }}
-                    className="p-3 border border-[#EDE8DE] hover:border-[#DEC9B3] rounded-lg bg-[#FAF9F5] hover:bg-white text-left transition-all cursor-pointer group flex items-center justify-between shadow-3xs"
+                    className="p-3 border border-neutral-200 hover:border-neutral-300 rounded-lg bg-neutral-50 hover:bg-white text-left transition-all cursor-pointer group flex items-center justify-between shadow-3xs"
                   >
                     <div className="flex flex-col gap-0.5 min-w-0">
                       <span className="font-bold text-neutral-900 text-xs">macOS Intel</span>
@@ -391,21 +401,21 @@ export default function Workspace({
                   >
                     {/* Message Meta Info Header */}
                     <div className="flex items-center gap-1.5 mb-1 text-[10px] text-neutral-400 font-sans px-1">
-                      <span className="font-bold text-neutral-600">{isUser ? (userProfile?.displayName || 'User Node') : 'Mtrini Agent'}</span>
+                      <span className="font-bold text-neutral-700">{isUser ? (userProfile?.displayName || 'User Node') : 'Mtrini Agent'}</span>
                       <span>•</span>
                       <span>{new Date(m.createdAt?.seconds * 1000 || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
 
                     <div 
-                      className={`max-w-[95%] p-4 rounded-2xl text-[13px] leading-relaxed font-sans border transition-all ${isUser ? 'bg-white border-[#DEC9B3] text-neutral-900 rounded-tr-none shadow-3xs' : 'bg-transparent border-transparent text-neutral-800'}`}
+                      className={`max-w-[95%] p-4 rounded-2xl text-[13px] leading-relaxed font-sans border transition-all ${isUser ? 'bg-white border-neutral-200 text-neutral-900 rounded-tr-none shadow-3xs' : 'bg-transparent border-transparent text-neutral-800'}`}
                     >
                       {/* Thought process tags */}
                       {!isUser && hasThought && (
-                        <div className="mb-3.5 bg-[#FAF9F5] border border-[#E6DCD0] rounded-xl overflow-hidden shadow-3xs max-w-2xl">
+                        <div className="mb-3.5 bg-neutral-100 border border-neutral-200 rounded-xl overflow-hidden shadow-3xs max-w-2xl">
                           <button
                             type="button"
                             onClick={() => toggleThought(m.id)}
-                            className="w-full flex items-center justify-between p-2.5 px-3 bg-[#EAE4D9]/60 text-neutral-800 hover:text-black transition-colors text-xs font-bold font-display uppercase tracking-wide"
+                            className="w-full flex items-center justify-between p-2.5 px-3 bg-neutral-200/60 text-neutral-800 hover:text-black transition-colors text-xs font-bold font-display uppercase tracking-wide"
                           >
                             <span className="flex items-center gap-1.5 text-neutral-800">
                               <Brain className={`w-3.5 h-3.5 ${themeColors.text}`} />
@@ -415,7 +425,7 @@ export default function Workspace({
                           </button>
                           
                           {isThoughtExpanded && (
-                            <pre className="p-3 bg-[#FAFDF9]/40 border-t border-[#E6DCD0] text-[10px] text-neutral-500 font-mono whitespace-pre-wrap overflow-x-auto leading-relaxed max-h-48 custom-scrollbar">
+                            <pre className="p-3 bg-white/40 border-t border-neutral-200 text-[10px] text-neutral-500 font-mono whitespace-pre-wrap overflow-x-auto leading-relaxed max-h-48 custom-scrollbar">
                               {thought}
                             </pre>
                           )}
@@ -431,13 +441,13 @@ export default function Workspace({
                       {parsed.hasArtifact && (
                         <div 
                           onClick={() => setSelectedArtifactMessageId(m.id)}
-                          className={`mt-4 p-3 bg-white border rounded-xl flex items-center justify-between gap-3 text-xs font-bold hover:border-current ${themeColors.hoverBorder} transition-all cursor-pointer shadow-3xs ${selectedArtifactMessageId === m.id ? `border-current ${themeColors.text}` : 'border-[#DEC9B3] text-neutral-700'}`}
+                          className={`mt-4 p-3 bg-white border rounded-xl flex items-center justify-between gap-3 text-xs font-bold hover:border-current ${themeColors.hoverBorder} transition-all cursor-pointer shadow-3xs ${selectedArtifactMessageId === m.id ? `border-current ${themeColors.text}` : 'border-neutral-200 text-neutral-700'}`}
                         >
                           <span className="flex items-center gap-2">
                             <Layers className={`w-4 h-4 ${themeColors.text} animate-pulse`} />
-                            <span>Script Block: <code className="font-mono bg-[#FAF9F5] px-1 rounded text-neutral-600 font-bold">{parsed.artifactTitle}</code></span>
+                            <span>Script Block: <code className="font-mono bg-neutral-100 px-1 rounded text-neutral-600 font-bold">{parsed.artifactTitle}</code></span>
                           </span>
-                          <span className="text-[10px] uppercase font-bold bg-[#FAF1EA] px-2.5 py-1 rounded-lg border border-[#DEC9B3]">
+                          <span className="text-[10px] uppercase font-bold bg-neutral-100 px-2.5 py-1 rounded-lg border border-neutral-200">
                             Activate Live Stage
                           </span>
                         </div>
@@ -458,21 +468,21 @@ export default function Workspace({
         </div>
 
         {/* Dynamic bottom prompt drawer box */}
-        <div className="p-4 bg-[#FAF8F5] border-t border-[#E6DCD0] select-none shrink-0 z-10">
+        <div className="p-4 bg-neutral-50 border-t border-neutral-200 select-none shrink-0 z-10">
           <div className="max-w-3xl mx-auto">
-            <form onSubmit={handleSubmit} className="flex flex-col bg-white border border-[#DEC9B3] rounded-2xl overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-amber-600 focus-within:border-amber-600 transition-all p-1">
+            <form onSubmit={handleSubmit} className="flex flex-col bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-neutral-400 focus-within:border-neutral-400 transition-all p-1">
                            {/* PARAMETERS DESK: model engine list and thinking styles */}
-              <div className="px-3 py-2 border-b border-[#FAF9F5] bg-[#FAF8F5] flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-500">
+              <div className="px-3 py-2 border-b border-neutral-100 bg-neutral-50 flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-500">
                 <div className="flex flex-wrap items-center gap-4">
                   {/* Model engine display */}
                   <div className="flex items-center gap-1.5">
                     <span className="text-[9.5px] font-bold text-neutral-500 uppercase tracking-wider">Model:</span>
-                    <span className="px-2 py-0.5 bg-white text-neutral-800 font-bold font-mono text-[10px] rounded-lg border border-[#E6DCD0] shadow-3xs">
+                    <span className="px-2 py-0.5 bg-white text-neutral-800 font-bold font-mono text-[10px] rounded-lg border border-neutral-200 shadow-3xs">
                       Mtrini v1.0
                     </span>
                   </div>
 
-                  <div className="h-4 w-[1px] bg-[#E6DCD0]" />
+                  <div className="h-4 w-[1px] bg-neutral-200" />
 
                   {/* Thinking mode switcher */}
                   <div className="flex items-center gap-1">
@@ -480,14 +490,14 @@ export default function Workspace({
                     <button
                       type="button"
                       onClick={() => onSelectThinking('fast')}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border ${selectedThinking === 'fast' ? 'bg-white border-[#DEC9B3] text-neutral-900 shadow-3xs' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border ${selectedThinking === 'fast' ? 'bg-white border-neutral-200 text-neutral-900 shadow-3xs' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
                     >
                       Standard
                     </button>
                     <button
                       type="button"
                       onClick={() => onSelectThinking('deep')}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border flex items-center gap-1 ${selectedThinking === 'deep' ? 'bg-white border-[#DEC9B3] text-neutral-900 shadow-3xs' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border flex items-center gap-1 ${selectedThinking === 'deep' ? 'bg-white border-neutral-200 text-neutral-900 shadow-3xs' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
                     >
                       <Brain className="w-3 h-3 text-amber-700" />
                       Deep Space
@@ -495,7 +505,7 @@ export default function Workspace({
                     <button
                       type="button"
                       onClick={() => onSelectThinking('short')}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border ${selectedThinking === 'short' ? 'bg-white border-[#DEC9B3] text-neutral-900 shadow-3xs' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border ${selectedThinking === 'short' ? 'bg-white border-neutral-200 text-neutral-900 shadow-3xs' : 'border-transparent text-neutral-400 hover:text-neutral-700'}`}
                     >
                       Concise
                     </button>
@@ -516,6 +526,51 @@ export default function Workspace({
 
               {/* Central Text Input text area panel */}
               <div className="flex items-start bg-white p-2">
+                {/* Image Drop Area */}
+                <div 
+                  className="flex flex-col items-center justify-center p-2 border-r border-neutral-200 w-12 hover:bg-neutral-50 transition-colors cursor-pointer"
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.onchange = (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const content = event.target?.result as string;
+                          if (file.type.startsWith('image/')) {
+                            setInputValue(prev => prev + `\n\n[IMAGE_UPLOAD: ${file.name}]\n${content}\n[/IMAGE_UPLOAD]\n`);
+                          } else {
+                            setInputValue(prev => prev + `\n\n[FILE_UPLOAD: ${file.name}]\n${content}\n[/FILE_UPLOAD]\n`);
+                          }
+                        };
+                        if (file.type.startsWith('image/')) {
+                          reader.readAsDataURL(file);
+                        } else {
+                          reader.readAsText(file);
+                        }
+                      }
+                    };
+                    input.click();
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const content = event.target?.result as string;
+                            setInputValue(prev => prev + `\n\n[FILE_UPLOAD: ${file.name}]\n${content}\n[/FILE_UPLOAD]\n`);
+                        };
+                        reader.readAsText(file);
+                    }
+                  }}
+                >
+                <Image className="w-4 h-4 text-neutral-600" />
+                  <span className="text-[8px] font-bold mt-1 text-center font-sans tracking-tighter">File/Vision</span>
+                </div>
+
                 <textarea
                   placeholder="Ask Mtrini to draft, refactor, or compile custom workspace components..."
                   disabled={streaming}
@@ -565,13 +620,6 @@ export default function Workspace({
                 className="px-2.5 py-1 border border-[#EDE8DE] hover:border-[#DEC9B3] rounded-lg bg-white hover:bg-neutral-50 text-[10px] text-neutral-600 font-sans cursor-pointer transition-colors shadow-3xs"
               >
                 Digital Clock
-              </button>
-              <button
-                type="button"
-                onClick={() => handleApplyPreset("Compile the interactive Mtrini Studio Video Trailer simulating beautiful kinetic text transitions.")}
-                className="px-2.5 py-1 border border-amber-200 hover:border-amber-400 rounded-lg bg-amber-50/50 hover:bg-white text-[10px] text-amber-800 font-bold font-sans cursor-pointer transition-colors shadow-3xs"
-              >
-                Mtrini Video Trailer
               </button>
             </div>
 

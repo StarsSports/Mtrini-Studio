@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Initialize Gemini API Client
 const apiKey = process.env.GEMINI_API_KEY;
@@ -36,40 +36,8 @@ app.get('/api/health', (req, res) => {
 });
 
 // API Route: Download pre-compiled desktop applet wrappers
-app.get('/api/download/mtrini', (req, res) => {
-  const platform = req.query.platform || 'windows';
-  let fileName = 'Mtrini_Desktop_1.1.exe';
-  
-  if (platform === 'mac-silicon' || platform === 'macos-silicon' || platform === 'mac-m1' || platform === 'mac-m2') {
-    fileName = 'Mtrini_Mac_Silicon';
-  } else if (platform === 'mac-intel' || platform === 'macos-intel' || platform === 'mac-x64') {
-    fileName = 'Mtrini_Mac_Intel';
-  }
-
-  const binaryPath = path.join(process.cwd(), fileName);
-  if (fs.existsSync(binaryPath)) {
-    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.sendFile(binaryPath);
-  } else {
-    // If running in development, try generating on-the-fly or warn gently
-    console.warn(`[Mtrini Server] Binary ${fileName} requested but not present. Forcing cross-platform compile sequence...`);
-    try {
-      const { execSync } = require('child_process');
-      execSync('node compile-win-exe.cjs');
-      if (fs.existsSync(binaryPath)) {
-        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
-        res.setHeader('Content-Type', 'application/octet-stream');
-        res.sendFile(binaryPath);
-        return;
-      }
-    } catch (compileErr: any) {
-      console.error("[Mtrini Server] Failed on-the-fly compilation:", compileErr.message);
-    }
-    res.status(404).json({ 
-      error: `Mtrini pre-compiled binary for ${platform} was not found on the host compiler framework.` 
-    });
-  }
+app.get('/api/download/applet', (req, res) => {
+  res.status(404).json({ error: 'Downloads are currently unavailable.' });
 });
 
 // API Route: MCP Scan and Probe
@@ -120,7 +88,7 @@ app.post('/api/mcp/scan', async (req, res) => {
     console.warn(`MCP Server probe failed to: ${url}. Falling back to virtual simulation mode.`, err.message);
     res.json({
       status: 'error',
-      message: `Failed to ping physical MCP. Initiated Mtrini Virtual MCP Tunnel.`,
+      message: `Failed to ping physical MCP. Initiated Virtual MCP Tunnel.`,
       tools: [
         { name: 'mcp_dir_scan', description: 'Scan Workspace Structure (Simulated)', inputSchema: { type: 'object', properties: { path: { type: 'string' } } } },
         { name: 'mcp_file_write', description: 'Write File Context (Simulated)', inputSchema: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } } }
@@ -167,7 +135,7 @@ app.post('/api/chat', async (req, res) => {
 
   if (!keyToUse) {
     return res.status(500).json({ 
-      error: 'GEMINI_API_KEY is not configured. Please enter your Gemini API Key in the Control Desk settings (click the green "Desktop Client" button on top, open the control gear, and enter it in "Mtrini Direct Bridge Tunnel") to resume chat operations instantly.' 
+      error: 'GEMINI_API_KEY is not configured. Please enter your Gemini API Key in the Control Desk settings.' 
     });
   }
 
@@ -190,7 +158,7 @@ app.post('/api/chat', async (req, res) => {
     const thinkingStyle = selectedThinking || 'fast'; // fast, deep, short
 
     let modelSpecsLabel = isPremiumModel 
-      ? "Mtrini 1.1 Premium Edition (Supercomputer Tier, Nova AI)" 
+      ? "Mtrini 1.1 Premium Edition (Supercomputer Tier, Mtrini AI)" 
       : "Mtrini 1.0 Standard Edition (Free Core Tier)";
 
     let thinkingSystemPrompt = "";
@@ -247,12 +215,11 @@ CODELINE PERSONALITY: STANDARD COMPILER NODE:
 - Output direct, robust, and copy-paste friendly code structures optimized for instant execution and developer utilities.`;
     }
 
-    // Construct System Prompt enforcing all user demands
     const systemPrompt = `You are "Mtrini 1.0", a premium, hyper-advanced Senior Developer AI Engine.
 Core Identity & Branding:
 - Active Model: ${modelSpecsLabel}
 - App Name: Mtrini 1.0 (with alternative Mtrini 1.1 Premium Core engine)
-- Slogan: "Mtrini: Made By Nova AI"
+- Slogan: "Mtrini: Made By Mtrini AI"
 - Special Milestone: You must proudly display, embody, or reference the title "The First Ever 100% Moroccan AI" when asked about your identity or origin.
 
 ${thinkingSystemPrompt}
@@ -265,8 +232,8 @@ Coding Guidelines:
    - Force event-driven models exclusively (e.g. use workspace.ChildAdded, Player.PlayerAdded, etc.).
    - STRICTLY BAN nested, infinite while-wait loops (like "while wait() do") as they cause severe memory-leak lag.
    - Promote sound Roblox garbage collection and memory-leak prevention.
-3. If the user requests a trailer video of Mtrini, or asks about rendering the visual sequence, you MUST write an ARTIFACT block with title="Mtrini Trailer" and language="html". Inside the block, write a beautiful comprehensive explanation of the kinetic video transition, along with the precise Google Veo prompt so they can simulate it natively layout-wise.
-4. STRICT COMPLIANCE RULE: Do NOT use ANY emojis in your responses. Under no circumstances should emojis be output. Only speak in pure objective prose with clean formatting, utilizing custom-drawn styles or standard symbols if necessary.
+3. STRICT COMPLIANCE RULE: Do NOT use ANY emojis in your responses. Under no circumstances should emojis be output. Only speak in pure objective prose with clean formatting, utilizing custom-drawn styles or standard symbols if necessary.
+4. SECURITY POLICY: You are absolutely prohibited from generating code for hacks, exploits, malware, or systems intended to damage, access, or disrupt other computing environments. Any such request MUST be refused politely, referring to your core safety protocol.
 
 Interactive Workspace Artifact Block Protocol:
 - When you output substantial blocks of code (more than 10 lines, or complete files, HTML page content, scripts, etc.), you MUST wrap those blocks inside specialized [ARTIFACT] XML-style tags.
@@ -274,10 +241,6 @@ Interactive Workspace Artifact Block Protocol:
 - Syntactical Structure:
 [ARTIFACT title="FILE_NAME_OR_UTILITY" language="LANG"]
 CODE_BODY_HERE
-[/ARTIFACT]
-Example:
-[ARTIFACT title="index.html" language="html"]
-<!DOCTYPE html><html>...</html>
 [/ARTIFACT]
 
 HTTP MCP Integration context:
