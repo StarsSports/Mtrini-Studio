@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   X, Settings, Cpu, Palette, RefreshCw, ShieldCheck, HelpCircle, HardDrive, Sparkles, AlertTriangle, CheckCircle,
-  Keyboard, Zap, Sliders, ToggleLeft, ToggleRight, Check
+  Keyboard, Zap, Sliders, ToggleLeft, ToggleRight, Check, Terminal
 } from 'lucide-react';
 import { UserProfile, ThemeColors } from '../types';
 
@@ -421,6 +421,103 @@ export default function RightDrawer({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Roblox Game Direct Integration poller card */}
+        <div className="p-4 border border-emerald-250 bg-emerald-50/10 rounded-xl space-y-3 shadow-3xs">
+          <div className="flex items-center justify-between pb-2 border-b border-emerald-200 select-none">
+            <span className="text-[10px] font-black text-emerald-990 uppercase tracking-wider flex items-center gap-1.5 font-display">
+              <Terminal className="w-3.5 h-3.5 text-emerald-700 animate-pulse" />
+              Roblox Studio Live Sync
+            </span>
+            <span className="text-[8px] font-mono font-bold bg-emerald-500 text-white px-1.5 py-0.5 rounded leading-none shadow-3xs select-none">
+              ACTIVE BRIDGE
+            </span>
+          </div>
+
+          <p className="text-[11px] text-[#064e43] font-sans leading-relaxed">
+            Since your workspace uses secure direct JSON linking, paste and run this background poller inside Roblox Studio's <strong>Command Bar</strong> or as a Server Script to spawn assets, scripts, and properties <strong>instantly & directly</strong>:
+          </p>
+
+          <div className="space-y-2">
+            <pre className="p-3 bg-neutral-950 text-[9.5px] text-emerald-400 font-mono rounded-lg overflow-x-auto max-h-56 custom-scrollbar leading-relaxed select-all border border-neutral-800">
+{`-- Mtrini Direct Live Poller Sync (Roblox Studio)
+local HttpService = game:GetService("HttpService")
+local workspace = game:GetService("Workspace")
+
+local SERVER_URL = "${window.location.origin}/api/roblox/commands"
+print("[Mtrini Sync] Listening for live actions at: " .. SERVER_URL)
+
+local function locate(path)
+    local parts = string.split(path, ".")
+    local cur = game
+    for _, name in ipairs(parts) do
+        local child = cur:FindFirstChild(name)
+        if not child then return nil end
+        cur = child
+    end
+    return cur
+end
+
+task.spawn(function()
+    while true do
+        local ok, data = pcall(function()
+            return HttpService:GetAsync(SERVER_URL)
+        end)
+        if ok and data and data ~= "" then
+            local cmds = HttpService:JSONDecode(data)
+            for _, cmd in ipairs(cmds) do
+                local args = cmd.arguments or {}
+                print("[Mtrini] Executing instant: " .. cmd.name)
+                
+                pcall(function()
+                    if cmd.name == "roblox_create_part" then
+                        local p = Instance.new(args.className or "Part")
+                        p.Name = args.Name or "MtriniPart"
+                        p.Position = Vector3.new(unpack(args.Position or {0, 10, 0}))
+                        p.Size = Vector3.new(unpack(args.Size or {4, 1, 4}))
+                        if args.Color then p.BrickColor = BrickColor.new(args.Color) end
+                        if args.Material then p.Material = Enum.Material[args.Material] end
+                        p.Anchored = true
+                        p.Parent = workspace
+                        print("[Mtrini] Successfully spawned part: " .. p.Name)
+                        
+                    elseif cmd.name == "roblox_write_script" then
+                        local s = Instance.new("Script")
+                        s.Name = args.scriptName or "GameScript"
+                        s.Source = args.content or ""
+                        s.Parent = workspace
+                        print("[Mtrini] Successfully injected script: " .. s.Name)
+                        
+                    elseif cmd.name == "roblox_insert_model" then
+                        local assetId = tonumber(args.assetId)
+                        if assetId then
+                            local objects = game:GetObjects("rbxassetid://" .. assetId)
+                            for _, obj in ipairs(objects) do
+                                obj.Parent = workspace
+                            end
+                            print("[Mtrini] Successfully inserted assetId " .. assetId)
+                        end
+                        
+                    elseif cmd.name == "roblox_set_property" then
+                        local obj = locate(args.instancePath)
+                        if obj then
+                            obj[args.propertyName] = args.value
+                            print("[Mtrini] Property altered: " .. args.propertyName)
+                        end
+                    end
+                end)
+            end
+        end
+        task.wait(1.5)
+    end
+end)`}
+            </pre>
+            <div className="flex items-center gap-1.5 text-[9px] text-neutral-500 font-mono select-none">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+              <span>Make sure HttpEnabled is toggled true in Roblox Game settings under Security.</span>
+            </div>
+          </div>
         </div>
 
         {/* Module 4: Custom Private API Key Overrides */}

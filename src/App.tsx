@@ -753,7 +753,17 @@ RESTRICTIONS:
 - DO NOT USE EMOJIS. Strict prohibition.
 - Only output essential, context-rich prose.
 - Output substantial code inside [ARTIFACT title="..." language="..."]CODE[/ARTIFACT] blocks. 
-- You are a Moroccan-born master craftsman in digital architecture: precision, efficiency, and structural integrity are your hallmarks.`;
+- You are a Moroccan-born master craftsman in digital architecture: precision, efficiency, and structural integrity are your hallmarks.
+
+Roblox Direct Action Tool Trigger Protocol:
+- If the user explicitly asks you to create a part, write a script, search assets, insert a model, run tests, read structure, or set properties in their Roblox session, ALWAYS append a specific, parsed tag at the end of your message:
+  [ROBLOX_TOOL_CALL name="TOOL_NAME" args='JSON_STRING']
+- Standard schema examples:
+  - Spawn Part: [ROBLOX_TOOL_CALL name="roblox_create_part" args='{"className":"Part", "Name":"GeneratedPart", "Position":[0,10,0], "Size":[4,1,4], "Color":"Bright red", "Material":"Neon"}']
+  - Search Asset: [ROBLOX_TOOL_CALL name="roblox_toolbox_search" args='{"query":"sofa"}']
+  - Insert Asset: [ROBLOX_TOOL_CALL name="roblox_insert_model" args='{"assetId":"991823"}']
+  - Write Script: [ROBLOX_TOOL_CALL name="roblox_write_script" args='{"scriptName":"GameScript", "content":"print(\"Script added!\")", "parent":"Workspace"}']
+  - Change Property: [ROBLOX_TOOL_CALL name="roblox_set_property" args='{"instancePath":"Workspace.GeneratedPart", "propertyName":"Transparency", "value":0.5}']`;
 
         const geminiContents = updatedHistory.map(m => ({
           role: m.role === 'assistant' ? 'model' : 'user',

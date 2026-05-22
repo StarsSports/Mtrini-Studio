@@ -80,3 +80,41 @@ export function downloadFile(filename: string, content: string) {
   element.click();
   document.body.removeChild(element);
 }
+
+export interface RobloxToolCall {
+  name: string;
+  arguments: any;
+}
+
+/**
+ * Parses out [ROBLOX_TOOL_CALL name="..." args='...'] from a message
+ */
+export function parseRobloxToolCall(content: string): RobloxToolCall | null {
+  if (!content) return null;
+  const match = content.match(/\[ROBLOX_TOOL_CALL\s+name="([^"]*)"\s+args='([^']*)'\]/i) || 
+                content.match(/\[ROBLOX_TOOL_CALL\s+name="([^"]*)"\s+args="([^"]*)"\]/i);
+  if (!match) return null;
+
+  try {
+    return {
+      name: match[1],
+      arguments: JSON.parse(match[2])
+    };
+  } catch (e) {
+    console.error("Failed to parse Roblox tool call arguments:", e);
+    return {
+      name: match[1],
+      arguments: {}
+    };
+  }
+}
+
+/**
+ * Strips out the robo-tool call tags from user-facing responses
+ */
+export function stripRobloxToolTag(content: string): string {
+  if (!content) return '';
+  return content.replace(/\[ROBLOX_TOOL_CALL\s+name="[^"]*"\s+args='[^']*'\]/gi, '')
+                .replace(/\[ROBLOX_TOOL_CALL\s+name="[^"]*"\s+args="[^"]*"\]/gi, '')
+                .trim();
+}

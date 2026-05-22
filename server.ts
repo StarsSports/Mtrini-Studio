@@ -195,11 +195,50 @@ app.post('/api/mcp/scan', async (req, res) => {
   }
 });
 
+// Memory channel for direct live Roblox Studio integration
+let robloxCommandQueue: any[] = [];
+let robloxHistory: any[] = [];
+
+// API Route: Poll and consume pending Roblox Studio commands
+app.get('/api/roblox/commands', (req, res) => {
+  const list = [...robloxCommandQueue];
+  robloxCommandQueue = []; // Consume on read
+  res.json(list);
+});
+
+app.post('/api/roblox/poll', (req, res) => {
+  const list = [...robloxCommandQueue];
+  robloxCommandQueue = []; // Consume on read
+  res.json({ success: true, commands: list });
+});
+
+app.post('/api/roblox/clear', (req, res) => {
+  robloxCommandQueue = [];
+  res.json({ success: true, message: 'Roblox sync queue cleared.' });
+});
+
+app.get('/api/roblox/history', (req, res) => {
+  res.json(robloxHistory);
+});
+
 // API Route: Execute MCP custom tool action
 app.post('/api/mcp/call', async (req, res) => {
   const { url, toolName, arguments: toolArgs } = req.body;
   if (!url || !toolName) {
     return res.status(400).json({ error: 'MCP URL and Tool Name are required' });
+  }
+
+  // Always queue the command for standard live ingestion by Roblox Studio pollers
+  const queueItem = {
+    id: 'cmd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+    name: toolName,
+    arguments: toolArgs,
+    timestamp: new Date().toISOString()
+  };
+  robloxCommandQueue.push(queueItem);
+  robloxHistory.push(queueItem);
+  if (robloxHistory.length > 50) {
+    robloxHistory.shift();
   }
 
   try {
@@ -351,6 +390,16 @@ Coding Guidelines:
    - Promote sound Roblox garbage collection and memory-leak prevention.
 3. STRICT COMPLIANCE RULE: Do NOT use ANY emojis in your responses. Under no circumstances should emojis be output. Only speak in pure objective prose with clean formatting, utilizing custom-drawn styles or standard symbols if necessary.
 4. SECURITY POLICY: You are absolutely prohibited from generating code for hacks, exploits, malware, or systems intended to damage, access, or disrupt other computing environments. Any such request MUST be refused politely, referring to your core safety protocol.
+
+Roblox Direct Action Tool Trigger Protocol:
+- If the user explicitly asks you to create a part, write a script, search assets, insert a model, run tests, read structure, or set properties in their Roblox session, ALWAYS append a specific, parsed tag at the end of your message:
+  [ROBLOX_TOOL_CALL name="TOOL_NAME" args='JSON_STRING']
+- Standard schema examples:
+  - Spawn Part: [ROBLOX_TOOL_CALL name="roblox_create_part" args='{"className":"Part", "Name":"GeneratedPart", "Position":[0,10,0], "Size":[4,1,4], "Color":"Bright red", "Material":"Neon"}']
+  - Search Asset: [ROBLOX_TOOL_CALL name="roblox_toolbox_search" args='{"query":"sofa"}']
+  - Insert Asset: [ROBLOX_TOOL_CALL name="roblox_insert_model" args='{"assetId":"991823"}']
+  - Write Script: [ROBLOX_TOOL_CALL name="roblox_write_script" args='{"scriptName":"GameScript", "content":"print(\"Script added!\")", "parent":"Workspace"}']
+  - Change Property: [ROBLOX_TOOL_CALL name="roblox_set_property" args='{"instancePath":"Workspace.GeneratedPart", "propertyName":"Transparency", "value":0.5}']
 
 Interactive Workspace Artifact Block Protocol:
 - When you output substantial blocks of code (more than 10 lines, or complete files, HTML page content, scripts, etc.), you MUST wrap those blocks inside specialized [ARTIFACT] XML-style tags.

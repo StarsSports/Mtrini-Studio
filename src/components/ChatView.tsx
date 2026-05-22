@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Message, ThemeColors, UserProfile } from '../types';
 import ArtifactView from './ArtifactView';
-import { parseMessageArtifacts } from '../utils';
+import { parseMessageArtifacts, parseRobloxToolCall, stripRobloxToolTag } from '../utils';
 import StreamingThinkingIndicator from './StreamingThinkingIndicator';
 
 interface ChatViewProps {
@@ -43,14 +43,64 @@ function parseMessageThoughts(content: string): ParsedThought {
   return { thought, response };
 }
 
-const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleThought, expandedThoughts, setSelectedArtifactMessageId, selectedArtifactMessageId }: any) => {
+const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleThought, expandedThoughts, setSelectedArtifactMessageId, selectedArtifactMessageId, isLatest, streaming }: any) => {
   const { thought, response } = parseMessageThoughts(m.content || '');
   const parsed = parseMessageArtifacts(response);
+  const robloxTool = parseRobloxToolCall(response);
+  const cleanProse = stripRobloxToolTag(parsed.prose);
+
   const hasThought = thought.trim().length > 0;
   const isThoughtExpanded = expandedThoughts[m.id] !== false;
 
+  const [execStatus, setExecStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
+  const [execOutput, setExecOutput] = useState<string>('');
+
+  const handleExecuteRobloxTool = async () => {
+    if (!robloxTool) return;
+    setExecStatus('running');
+    setExecOutput('');
+    try {
+      const res = await fetch('/api/mcp/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: userProfile?.mcpServer || 'Roblox_Studio_JSON_STDIO',
+          toolName: robloxTool.name,
+          arguments: robloxTool.arguments
+        })
+      });
+
+      const result = await res.json();
+      if (!res.ok || (result.error && !result.success)) {
+        throw new Error(result.error || result.message || 'Tool execution was rejected or timeout by companion.');
+      }
+      
+      setExecStatus('success');
+      // Format response cleanly
+      const textOutput = result.content?.[0]?.text || result.output || `Successfully executed ${robloxTool.name}!`;
+      setExecOutput(textOutput);
+    } catch (err: any) {
+      setExecStatus('error');
+      setExecOutput(err.message || 'Direct connection gateway link failed. Make sure your local Mtrini Desktop companion is running.');
+    }
+  };
+
+  useEffect(() => {
+    // Only auto-trigger actions if the message is the latest generated message, streaming just completed, there is a pending roblox tool tag, and state is idle.
+    if (isLatest && !streaming && robloxTool && execStatus === 'idle') {
+      const msgTime = m.createdAt?.seconds 
+        ? m.createdAt.seconds * 1000 
+        : (m.createdAt instanceof Date ? m.createdAt.getTime() : Date.now());
+      const ageMs = Date.now() - msgTime;
+      // Guard: only execute if the message description was compiled within the last 15 seconds (prevents repeating historic tasks on reload)
+      if (ageMs < 15000) {
+        handleExecuteRobloxTool();
+      }
+    }
+  }, [isLatest, streaming, robloxTool, execStatus, m.createdAt]);
+
   return (
-    <div key={m.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-1`}>
+    <div key={m.id} className="flex flex-col w-full space-y-1">
       <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 font-mono px-1 select-none">
         <span className="font-bold text-neutral-700">
           {isUser ? (userProfile?.displayName || 'User Node') : 'Mtrini AI Agent'}
@@ -60,14 +110,14 @@ const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleTho
       </div>
 
       <div 
-        className={`max-w-[95%] p-4 rounded-2xl text-[13px] leading-relaxed font-sans border transition-all ${isUser ? 'bg-white border-neutral-200 text-neutral-900 rounded-tr-none shadow-3xs' : 'bg-transparent border-transparent text-neutral-800'}`}
+        className={`max-w-[95%] p-4 rounded-2xl text-[13px] leading-relaxed font-sans border transition-all ${isUser ? 'bg-white border-neutral-200 text-neutral-900 rounded-tr-none shadow-3xs self-end' : 'bg-transparent border-transparent text-neutral-800'}`}
       >
         {!isUser && hasThought && (
           <div className="mb-3.5 bg-neutral-100 border border-neutral-200 rounded-xl overflow-hidden shadow-3xs max-w-2xl">
             <button
               type="button"
               onClick={() => toggleThought(m.id)}
-              className="w-full flex items-center justify-between p-2.5 px-3 bg-neutral-200/60 text-neutral-800 hover:text-black transition-colors text-xs font-bold font-display uppercase tracking-wide"
+              className="w-full flex items-center justify-between p-2.5 px-3 bg-neutral-200/60 text-neutral-800 hover:text-black transition-colors text-xs font-bold font-display uppercase tracking-wide cursor-pointer"
             >
               <span className="flex items-center gap-1.5 text-neutral-800">
                 <Brain className={`w-3.5 h-3.5 ${themeColors.text}`} />
@@ -85,8 +135,95 @@ const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleTho
         )}
 
         <div className="whitespace-pre-wrap select-text pr-1 prose leading-relaxed font-sans text-neutral-800">
-          {parsed.prose}
+          {cleanProse}
         </div>
+
+        {/* Beautiful Roblox Live Action Control Panel */}
+        {!isUser && robloxTool && (
+          <div className="mt-4 p-4 bg-emerald-50/70 border border-emerald-200/85 rounded-2xl shadow-3xs max-w-2xl">
+            <div className="flex items-center justify-between gap-3 mb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className="text-xs font-bold font-mono tracking-tight text-emerald-950">
+                  ⚡ Roblox Studio Action: <code className="bg-emerald-100/80 px-1.5 py-0.5 rounded border border-emerald-250 text-[11px]">{robloxTool.name}</code>
+                </span>
+              </div>
+              
+              {execStatus === 'idle' && (
+                <span className="text-[9px] font-mono uppercase bg-emerald-150 border border-emerald-250 px-2 py-0.5 rounded font-bold text-emerald-800 select-none">
+                  READY
+                </span>
+              )}
+              {execStatus === 'running' && (
+                <span className="text-[9px] font-mono uppercase bg-neutral-100 border text-neutral-600 px-2 py-0.5 rounded font-bold flex items-center gap-1 select-none">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" /> RUNNING
+                </span>
+              )}
+              {execStatus === 'success' && (
+                <span className="text-[9px] font-mono uppercase bg-emerald-500 text-white px-2 py-0.5 rounded font-bold select-none shadow-3xs">
+                  SUCCESS
+                </span>
+              )}
+              {execStatus === 'error' && (
+                <span className="text-[9px] font-mono uppercase bg-rose-600 text-white px-2 py-0.5 rounded font-bold select-none shadow-3xs">
+                  FAILED
+                </span>
+              )}
+            </div>
+
+            <p className="text-[11px] text-neutral-600 mb-3 font-sans">
+              Mtrini compiled a direct executable payload. Tap below to send this instruction directly into Roblox Studio without pasting scripts manually.
+            </p>
+
+            <div className="mb-3.5 bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden shadow-inner">
+              <div className="px-3 py-1 bg-neutral-100/5 text-[9px] text-neutral-400 font-mono uppercase select-none tracking-widest border-b border-neutral-900">
+                Action Arguments (JSON)
+              </div>
+              <pre className="p-3 text-[10.5px] text-emerald-400 font-mono whitespace-pre-wrap overflow-x-auto leading-normal max-h-36 custom-scrollbar select-all bg-neutral-950/80">
+                {JSON.stringify(robloxTool.arguments, null, 2)}
+              </pre>
+            </div>
+
+            {execStatus === 'idle' && (
+              <button
+                type="button"
+                onClick={handleExecuteRobloxTool}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-xs hover:shadow transition-all cursor-pointer"
+              >
+                Assemble & Spawn directly in Game
+              </button>
+            )}
+
+            {execStatus === 'running' && (
+              <button
+                type="button"
+                disabled
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-neutral-100 text-neutral-400 font-bold text-xs rounded-xl border select-none"
+              >
+                <Loader2 className="w-3 h-3 animate-spin text-neutral-500" /> Connecting to Local Roblox Daemon...
+              </button>
+            )}
+
+            {(execStatus === 'success' || execStatus === 'error') && (
+              <div className="space-y-3">
+                <div className={`p-3 border rounded-xl text-[11px] font-mono ${execStatus === 'success' ? 'bg-emerald-50 text-emerald-850 border-emerald-150' : 'bg-rose-50 text-rose-850 border-rose-150'} leading-relaxed overflow-x-auto max-h-36 custom-scrollbar select-text`}>
+                  <strong className="block mb-1 uppercase tracking-wider text-[9px] select-none font-sans font-bold">
+                    {execStatus === 'success' ? '✔ Live Output Logs:' : '⚠ Client Error Report:'}
+                  </strong>
+                  {execOutput}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleExecuteRobloxTool}
+                  className="w-full py-1.5 px-3 bg-white border border-neutral-200 hover:bg-neutral-50 text-neutral-700 font-bold text-[10.5px] rounded-lg shadow-3xs transition-colors cursor-pointer"
+                >
+                  Re-Execute Direct Payload
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {parsed.hasArtifact && (
           <div 
@@ -95,10 +232,10 @@ const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleTho
           >
             <span className="flex items-center gap-2">
               <Layers className={`w-4 h-4 ${themeColors.text} animate-pulse`} />
-              <span>Script Block: <code className="font-mono bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-600 font-semibold">{parsed.artifactTitle}</code></span>
+              <span>Script Bloc: <code className="font-mono bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-600 font-semibold">{parsed.artifactTitle}</code></span>
             </span>
             <span className="text-[10px] uppercase font-bold bg-neutral-100 px-2.5 py-1 rounded-lg border border-neutral-200">
-              Activate Live Stage
+              Open Side-by-Side Editor
             </span>
           </div>
         )}
@@ -273,7 +410,7 @@ export default function ChatView({
           </div>
         ) : (
           <div className="space-y-5 max-w-3xl mx-auto">
-            {messages.map((m) => (
+            {messages.map((m, index) => (
               <MessageItem 
                 key={m.id}
                 m={m}
@@ -284,6 +421,8 @@ export default function ChatView({
                 expandedThoughts={expandedThoughts}
                 setSelectedArtifactMessageId={setSelectedArtifactMessageId}
                 selectedArtifactMessageId={selectedArtifactMessageId}
+                isLatest={index === messages.length - 1}
+                streaming={streaming}
               />
             ))}
             {streaming && (
