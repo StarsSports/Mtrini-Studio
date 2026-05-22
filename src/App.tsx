@@ -751,7 +751,16 @@ RESTRICTIONS:
           parts: [{ text: m.content }]
         }));
 
-        const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${localApiKey.trim()}`, {
+        let activeClientKey = localApiKey.trim();
+        if (activeClientKey.startsWith('base64:')) {
+          try {
+            activeClientKey = atob(activeClientKey.substring(7)).trim();
+          } catch (e) {
+            console.error('Failed to decode client override base64 key:', e);
+          }
+        }
+
+        const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${activeClientKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

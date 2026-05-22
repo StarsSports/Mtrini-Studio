@@ -11,8 +11,56 @@ const PORT = 3000;
 
 app.use(express.json({ limit: '50mb' }));
 
-// Initialize Gemini API Client
-const apiKey = process.env.GEMINI_API_KEY;
+// Resolve assembled API Key dynamically
+function getGeminiApiKey(): string | undefined {
+  if (process.env.GEMINI_API_KEY) {
+    return process.env.GEMINI_API_KEY;
+  }
+  if (process.env.GEMINI_API_BASE64) {
+    try {
+      return Buffer.from(process.env.GEMINI_API_BASE64, 'base64').toString('utf-8').trim();
+    } catch (e) {
+      console.error('[Key Assembler] Failed to decode GEMINI_API_BASE64:', e);
+    }
+  }
+  if (process.env.GEMINI_API_PART1 || process.env.GEMINI_API_PART2) {
+    const p1 = process.env.GEMINI_API_PART1 || '';
+    const p2 = process.env.GEMINI_API_PART2 || '';
+    const p3 = process.env.GEMINI_API_PART3 || '';
+    const assembled = (p1 + p2 + p3).trim();
+    if (assembled) return assembled;
+  }
+  const keyPartsPath = path.join(process.cwd(), 'key_parts.json');
+  if (fs.existsSync(keyPartsPath)) {
+    try {
+      const fileContent = fs.readFileSync(keyPartsPath, 'utf-8');
+      const parsed = JSON.parse(fileContent);
+      if (parsed.parts && Array.isArray(parsed.parts)) {
+        return parsed.parts.join('').trim();
+      }
+      if (parsed.base64) {
+        return Buffer.from(parsed.base64, 'base64').toString('utf-8').trim();
+      }
+    } catch (e) {
+      console.error('[Key Assembler] Failed to read or parse key_parts.json:', e);
+    }
+  }
+  const keyPartsTxtPath = path.join(process.cwd(), 'key_parts.txt');
+  if (fs.existsSync(keyPartsTxtPath)) {
+    try {
+      return fs.readFileSync(keyPartsTxtPath, 'utf-8')
+               .split('\n')
+               .map(l => l.trim())
+               .filter(l => l && !l.startsWith('#'))
+               .join('');
+    } catch (e) {
+      console.error('[Key Assembler] Failed to read key_parts.txt:', e);
+    }
+  }
+  return undefined;
+}
+
+const apiKey = getGeminiApiKey();
 const aiClient = apiKey 
   ? new GoogleGenAI({
       apiKey,
@@ -35,7 +83,7 @@ app.use((req, res, next) => {
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    hasApiKey: !!apiKey,
+    hasApiKey: !!getGeminiApiKey(),
     mcpActive: true,
     time: new Date().toISOString()
   });
@@ -181,11 +229,30 @@ app.post('/api/mcp/call', async (req, res) => {
 app.post('/api/chat', async (req, res) => {
   const { messages, selectedTheme, mcpUrl, selectedModel, selectedThinking, localApiKey } = req.body;
 
-  const keyToUse = localApiKey?.trim() || process.env.GEMINI_API_KEY;
+  let keyToUse = '';
+
+  // 1. Resolve browser-direct / local key override if provided
+  if (localApiKey?.trim()) {
+    const rawKey = localApiKey.trim();
+    if (rawKey.startsWith('base64:')) {
+      try {
+        keyToUse = Buffer.from(rawKey.substring(7), 'base64').toString('utf-8').trim();
+      } catch (e) {
+        console.error('[API Chat] Failed to decode base64 input key:', e);
+      }
+    } else {
+      keyToUse = rawKey;
+    }
+  }
+
+  // 2. Fall back to server key assembler
+  if (!keyToUse) {
+    keyToUse = getGeminiApiKey() || '';
+  }
 
   if (!keyToUse) {
     return res.status(500).json({ 
-      error: 'GEMINI_API_KEY is not configured. Please enter your Gemini API Key in the Control Desk settings.' 
+      error: 'GEMINI_API_KEY is not configured. Since you are in a hosted sandbox, please configure GEMINI_API_KEY in Settings > Secrets, or use the Base64/split environment format, or enter your override key in the Control Desk (Bridge Tunnel Override).' 
     });
   }
 
