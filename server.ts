@@ -223,44 +223,58 @@ app.get('/api/roblox/history', (req, res) => {
 
 // API Route: Execute MCP custom tool action
 app.post('/api/mcp/call', async (req, res) => {
-  const { url, toolName, arguments: toolArgs } = req.body;
-  if (!url || !toolName) {
-    return res.status(400).json({ error: 'MCP URL and Tool Name are required' });
-  }
-
-  // Always queue the command for standard live ingestion by Roblox Studio pollers
-  const queueItem = {
-    id: 'cmd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-    name: toolName,
-    arguments: toolArgs,
-    timestamp: new Date().toISOString()
-  };
-  robloxCommandQueue.push(queueItem);
-  robloxHistory.push(queueItem);
-  if (robloxHistory.length > 50) {
-    robloxHistory.shift();
-  }
-
   try {
-    const response = await fetch(`${url}/tools/call`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: toolName, arguments: toolArgs })
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      return res.json(result);
-    } else {
-      throw new Error(`Failed with status ${response.status}`);
+    const { url, toolName, arguments: toolArgs } = req.body;
+    if (!url || !toolName) {
+      return res.status(400).json({ error: 'MCP URL and Tool Name are required' });
     }
-  } catch (err: any) {
-    // Generate helpful virtual execution output for simulated environments
-    res.json({
-      success: true,
-      tool: toolName,
-      output: `[VIRTUAL TUNNEL SUCCESS] Tool "${toolName}" executed safely. Action was simulated within local high-density host environment. args: ${JSON.stringify(toolArgs)}`
-    });
+
+    // Always queue the command for standard live ingestion by Roblox Studio pollers
+    const queueItem = {
+      id: 'cmd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      name: toolName,
+      arguments: toolArgs,
+      timestamp: new Date().toISOString()
+    };
+    robloxCommandQueue.push(queueItem);
+    robloxHistory.push(queueItem);
+    if (robloxHistory.length > 50) {
+      robloxHistory.shift();
+    }
+
+    // If it's the standard stdio queue identifier or doesn't start with http, don't attempt a HTTP fetch
+    if (url === 'Roblox_Studio_JSON_STDIO' || !url.startsWith('http')) {
+      return res.json({
+        success: true,
+        tool: toolName,
+        output: `[MTRINI SYNC QUEUE] Tool execution successfully queued for Roblox Studio. Run the poller background sync script in Roblox Studio command bar to instantly spawn and apply this action! args: ${JSON.stringify(toolArgs)}`
+      });
+    }
+
+    try {
+      const response = await fetch(`${url}/tools/call`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: toolName, arguments: toolArgs })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        return res.json(result);
+      } else {
+        throw new Error(`Failed with status ${response.status}`);
+      }
+    } catch (err: any) {
+      // Generate helpful virtual execution output for simulated environments
+      return res.json({
+        success: true,
+        tool: toolName,
+        output: `[VIRTUAL TUNNEL SUCCESS] Tool "${toolName}" executed safely. Action was simulated within local high-density host environment. args: ${JSON.stringify(toolArgs)}`
+      });
+    }
+  } catch (globalErr: any) {
+    console.error('[API MCP Call] Global handler failure:', globalErr);
+    return res.status(500).json({ error: globalErr.message || 'Internal Bridge Error' });
   }
 });
 

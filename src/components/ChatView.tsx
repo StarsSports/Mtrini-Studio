@@ -70,8 +70,19 @@ const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleTho
         })
       });
 
-      const result = await res.json();
-      if (!res.ok || (result.error && !result.success)) {
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Server returned error status ${res.status}: ${text || 'Unknown endpoint error'}`);
+      }
+
+      let result: any;
+      try {
+        result = await res.json();
+      } catch (jsonErr) {
+        throw new Error('Server returned custom response, but failed to parse as JSON.');
+      }
+
+      if (result.error && !result.success) {
         throw new Error(result.error || result.message || 'Tool execution was rejected or timeout by companion.');
       }
       
