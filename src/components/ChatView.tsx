@@ -43,7 +43,7 @@ function parseMessageThoughts(content: string): ParsedThought {
   return { thought, response };
 }
 
-const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleThought, expandedThoughts, setSelectedArtifactMessageId, selectedArtifactMessageId, isLatest, streaming }: any) => {
+const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleThought, expandedThoughts, setSelectedArtifactMessageId, selectedArtifactMessageId, isLatest, streaming, isNew }: any) => {
   const { thought, response } = parseMessageThoughts(m.content || '');
   const parsed = parseMessageArtifacts(response);
   const robloxTool = parseRobloxToolCall(response);
@@ -97,18 +97,11 @@ const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleTho
   };
 
   useEffect(() => {
-    // Only auto-trigger actions if the message is the latest generated message, streaming just completed, there is a pending roblox tool tag, and state is idle.
-    if (isLatest && !streaming && robloxTool && execStatus === 'idle') {
-      const msgTime = m.createdAt?.seconds 
-        ? m.createdAt.seconds * 1000 
-        : (m.createdAt instanceof Date ? m.createdAt.getTime() : Date.now());
-      const ageMs = Date.now() - msgTime;
-      // Guard: only execute if the message description was compiled within the last 15 seconds (prevents repeating historic tasks on reload)
-      if (ageMs < 15000) {
-        handleExecuteRobloxTool();
-      }
+    // Only auto-trigger actions if the message is the latest generated message, is from the active session, streaming completed, there is a pending roblox tool tag, and state is idle.
+    if (isNew && isLatest && !streaming && robloxTool && execStatus === 'idle') {
+      handleExecuteRobloxTool();
     }
-  }, [isLatest, streaming, robloxTool, execStatus, m.createdAt]);
+  }, [isLatest, streaming, robloxTool, execStatus, isNew]);
 
   return (
     <div key={m.id} className="flex flex-col w-full space-y-1">
@@ -277,6 +270,22 @@ export default function ChatView({
   const [selectedArtifactMessageId, setSelectedArtifactMessageId] = useState<string | null>(null);
   const [isArtifactExpanded, setIsArtifactExpanded] = useState(false);
 
+  // Set of historic message IDs to filter automatic execution on initial loading
+  const historicMessageIds = useRef<Set<string>>(new Set());
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (!mounted && messages.length > 0) {
+      messages.forEach(m => historicMessageIds.current.add(m.id));
+      setMounted(true);
+    }
+  }, [messages, mounted]);
+
+  useEffect(() => {
+    historicMessageIds.current.clear();
+    setMounted(false);
+  }, [activeChatId]);
+
   // Auto-scroll logic
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -434,6 +443,7 @@ export default function ChatView({
                 selectedArtifactMessageId={selectedArtifactMessageId}
                 isLatest={index === messages.length - 1}
                 streaming={streaming}
+                isNew={mounted && !historicMessageIds.current.has(m.id)}
               />
             ))}
             {streaming && (

@@ -259,7 +259,13 @@ app.post('/api/mcp/call', async (req, res) => {
       });
 
       if (response.ok) {
-        const result = await response.json();
+        const text = await response.text();
+        let result: any;
+        try {
+          result = text ? JSON.parse(text) : { success: true, output: 'Success with empty response.' };
+        } catch (jsonErr) {
+          result = { success: true, output: text || 'Success' };
+        }
         return res.json(result);
       } else {
         throw new Error(`Failed with status ${response.status}`);
