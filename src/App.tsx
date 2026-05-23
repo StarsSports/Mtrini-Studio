@@ -171,6 +171,7 @@ export default function App() {
             credits: 450,
             themeColor: 'cyan',
             mcpServer: '',
+            bridgeUrl: '',
             createdAt: new Date()
           };
           setUserProfile(fallbackProfile);
@@ -227,6 +228,7 @@ export default function App() {
           credits: 999999,
           themeColor: data.themeColor || 'cyan',
           mcpServer: data.mcpServer || '',
+          bridgeUrl: data.bridgeUrl || '',
           isPremiumActive: true,
           mcpConfig: resolvedMcpConfig,
           createdAt: data.createdAt?.toDate() || new Date()
@@ -240,6 +242,7 @@ export default function App() {
           credits: 999999,
           themeColor: 'cyan',
           mcpServer: '',
+          bridgeUrl: '',
           isPremiumActive: true,
           mcpConfig: '',
           createdAt: new Date()
@@ -251,6 +254,7 @@ export default function App() {
           credits: 999999,
           themeColor: newProfile.themeColor,
           mcpServer: newProfile.mcpServer,
+          bridgeUrl: newProfile.bridgeUrl || '',
           isPremiumActive: true,
           mcpConfig: '',
           createdAt: serverTimestamp()
@@ -276,6 +280,7 @@ export default function App() {
         credits: 999999,
         themeColor: 'cyan',
         mcpServer: '',
+        bridgeUrl: '',
         isPremiumActive: true,
         mcpConfig: '',
         createdAt: new Date()
@@ -626,12 +631,22 @@ export default function App() {
 
     setMessages((prev) => [...prev, draftMessage]);
 
+    const getApiUrl = (endpoint: string) => {
+      if (userProfile?.bridgeUrl) {
+        return `${userProfile.bridgeUrl.replace(/\/$/, '')}${endpoint}`;
+      }
+      if (typeof window !== 'undefined' && window.location.hostname.includes('netlify.app')) {
+        return `https://ais-pre-2lec2iqt6rhwokfedcy24v-429842933088.europe-west2.run.app${endpoint}`;
+      }
+      return endpoint;
+    };
+
     try {
       let response: Response | null = null;
       let isFallback = false;
 
       try {
-        response = await fetch('/api/chat', {
+        response = await fetch(getApiUrl('/api/chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

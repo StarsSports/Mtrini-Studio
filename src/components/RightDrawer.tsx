@@ -40,6 +40,22 @@ export default function RightDrawer({
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [parsedServers, setParsedServers] = useState<Record<string, { command?: string; args?: string[]; url?: string; enabled?: boolean }>>({});
 
+  const getRobloxServerUrl = () => {
+    let base = '';
+    if (userProfile?.bridgeUrl) {
+      base = userProfile.bridgeUrl;
+    } else if (typeof window !== 'undefined' && window.location.hostname.includes('netlify.app')) {
+      base = 'https://ais-pre-2lec2iqt6rhwokfedcy24v-429842933088.europe-west2.run.app';
+    } else {
+      base = typeof window !== 'undefined' ? window.location.origin : '';
+    }
+    if (base.endsWith('/')) {
+      base = base.slice(0, -1);
+    }
+    return `${base}/api/roblox/commands`;
+  };
+  const robloxServerUrl = getRobloxServerUrl();
+
   useEffect(() => {
     try {
       let parsed = JSON.parse(mcpJsonStr);
@@ -445,7 +461,7 @@ export default function RightDrawer({
 local HttpService = game:GetService("HttpService")
 local workspace = game:GetService("Workspace")
 
-local SERVER_URL = "${window.location.origin}/api/roblox/commands"
+local SERVER_URL = "${robloxServerUrl}"
 print("[Mtrini Sync] Listening for live actions at: " .. SERVER_URL)
 
 local function locate(path)
@@ -517,6 +533,32 @@ end)`}
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
               <span>Make sure HttpEnabled is toggled true in Roblox Game settings under Security.</span>
             </div>
+          </div>
+        </div>
+
+        {/* Cloud Sync Bridge URL Override */}
+        <div className="bg-white p-4 border border-[#E6E0D5] rounded-xl space-y-3.5 shadow-3xs">
+          <div className="flex items-center justify-between pb-2 border-b border-[#E6DCD0] select-none">
+            <label className="text-[10px] font-black text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-700 hover:rotate-180 transition-all duration-300" />
+              Cloud Sync Bridge URL
+            </label>
+            <span className="text-[8px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 uppercase tracking-wide">
+              MTRINI SYNC
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            <input
+              type="text"
+              placeholder="e.g. https://ais-pre-...run.app"
+              value={userProfile?.bridgeUrl || ''}
+              onChange={(e) => onUpdatePreferences({ bridgeUrl: e.target.value })}
+              className="w-full bg-[#FAF9F5] border border-[#EDE8DE] focus:bg-white focus:border-[#DEC9B3] rounded-lg p-2 text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none transition-all font-mono"
+            />
+            <p className="text-[10px] text-neutral-500 leading-normal">
+              If running on static hosting like Netlify, specify your active Cloud Run Bridge URL to sync Roblox Studio commands directly.
+            </p>
           </div>
         </div>
 

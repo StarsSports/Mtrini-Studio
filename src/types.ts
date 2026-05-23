@@ -6,6 +6,7 @@ export interface UserProfile {
   credits: number;
   themeColor: 'cyan' | 'emerald' | 'crimson' | 'amber' | 'violet';
   mcpServer: string;
+  bridgeUrl?: string;
   isPremiumActive?: boolean;
   mcpConfig?: string;
   streamingEnabled?: boolean;

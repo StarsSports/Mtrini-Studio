@@ -55,12 +55,22 @@ const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleTho
   const [execStatus, setExecStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [execOutput, setExecOutput] = useState<string>('');
 
+  const getApiUrl = (endpoint: string) => {
+    if (userProfile?.bridgeUrl) {
+      return `${userProfile.bridgeUrl.replace(/\/$/, '')}${endpoint}`;
+    }
+    if (typeof window !== 'undefined' && window.location.hostname.includes('netlify.app')) {
+      return `https://ais-pre-2lec2iqt6rhwokfedcy24v-429842933088.europe-west2.run.app${endpoint}`;
+    }
+    return endpoint;
+  };
+
   const handleExecuteRobloxTool = async () => {
     if (!robloxTool) return;
     setExecStatus('running');
     setExecOutput('');
     try {
-      const res = await fetch('/api/mcp/call', {
+      const res = await fetch(getApiUrl('/api/mcp/call'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
