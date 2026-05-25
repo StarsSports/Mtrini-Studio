@@ -74,47 +74,36 @@ export default function LoginGate({ onGuestLogin }: LoginGateProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#F9F9F6] text-neutral-800 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-neutral-950 text-neutral-200 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
       {/* Editorial aesthetic organic background */}
-      <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-[#EBE7DF] rounded-full blur-[10rem] opacity-30 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-[#F2ECE4] rounded-full blur-[8rem] opacity-40 pointer-events-none" />
+      <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-neutral-900 rounded-full blur-[10rem] opacity-20 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-[#111111] rounded-full blur-[8rem] opacity-30 pointer-events-none" />
 
       {/* Main card */}
       <motion.div 
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-md bg-white border border-[#E2E2D5] rounded-2xl p-8 z-10 shadow-xl shadow-neutral-200/50"
+        className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-2xl p-8 z-10 shadow-2xl"
         id="login-main-card"
       >
-        {/* Moroccan Heritage Simple Decent Badge */}
-        <div className="flex justify-center mb-6">
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#EFECE3] border border-[#DDD9CE] text-neutral-600 font-sans text-[11px] font-medium uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-            The First Ever 100% Moroccan AI
-          </div>
-        </div>
-
         {/* Brand */}
         <div className="text-center mb-6">
-          <h1 className="text-4xl font-display font-bold text-neutral-900 tracking-tight">
-            Mtrini 1.0
+          <h1 className="text-3xl font-display font-medium text-white tracking-tight">
+            Mtrini Studio
           </h1>
-          <p className="text-[10px] text-neutral-500 font-mono mt-1.5 tracking-widest uppercase">
-            Creative Development Workspace
+          <p className="text-xs text-neutral-450 mt-1">
+            Simple, Elegant AI Companion
           </p>
-          <div className="mt-2 text-xs text-[#a16207] italic font-serif">
-            "Mtrini: Made By Nova AI"
-          </div>
         </div>
 
         {/* Form controls */}
         <form onSubmit={handleEmailAuth} className="space-y-4">
-          <div className="grid grid-cols-2 bg-[#F4F4F0] p-1 rounded-xl border border-[#E2E2D5] mb-2">
+          <div className="grid grid-cols-2 bg-neutral-950 p-1 rounded-xl border border-neutral-800 mb-2">
             <button
               type="button"
               onClick={() => { setIsSignUp(false); setError(null); }}
-              className={`py-1.5 text-xs font-medium rounded-lg transition-all ${!isSignUp ? 'bg-white text-neutral-900 shadow-sm border border-[#E2E2D5]/70' : 'text-neutral-500 hover:text-neutral-800'}`}
+              className={`py-1.5 text-xs font-medium rounded-lg transition-all ${!isSignUp ? 'bg-neutral-800 text-white shadow-sm border border-neutral-700' : 'text-neutral-450 hover:text-neutral-300'}`}
               id="tab-signin"
             >
               Sign In
@@ -122,62 +111,62 @@ export default function LoginGate({ onGuestLogin }: LoginGateProps) {
             <button
               type="button"
               onClick={() => { setIsSignUp(true); setError(null); }}
-              className={`py-1.5 text-xs font-medium rounded-lg transition-all ${isSignUp ? 'bg-white text-neutral-900 shadow-sm border border-[#E2E2D5]/70' : 'text-neutral-500 hover:text-neutral-800'}`}
+              className={`py-1.5 text-xs font-medium rounded-lg transition-all ${isSignUp ? 'bg-neutral-800 text-white shadow-sm border border-neutral-700' : 'text-neutral-450 hover:text-neutral-300'}`}
               id="tab-signup"
             >
-              Create Account
+              Sign Up
             </button>
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs text-center leading-relaxed">
+            <div className="p-3 bg-rose-950/55 border border-rose-800 rounded-xl text-rose-300 text-xs text-center leading-relaxed font-mono">
               {error}
             </div>
           )}
 
           {isSignUp && (
             <div>
-              <label className="block text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-1">Display Name</label>
+              <label className="block text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Name</label>
               <div className="relative">
-                <User className="absolute left-3.5 top-3 w-4 h-4 text-neutral-400" />
+                <User className="absolute left-3.5 top-3 w-4 h-4 text-neutral-500" />
                 <input
                   type="text"
-                  placeholder="Nova AI Developer"
+                  placeholder="Your Name"
                   required
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full bg-[#FCFCFA] border border-[#DCDCD2] rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-1 focus:ring-amber-500 focus:border-amber-500 focus:outline-none transition-all"
+                  className="w-full bg-neutral-950 border border-neutral-800 text-white rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-1 focus:ring-neutral-700 focus:border-neutral-700 focus:outline-none transition-all"
                 />
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-1">Email Address</label>
+            <label className="block text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Email Address</label>
             <div className="relative">
-              <Mail className="absolute left-3.5 top-3 w-4 h-4 text-neutral-400" />
+              <Mail className="absolute left-3.5 top-3 w-4 h-4 text-neutral-500" />
               <input
                 type="email"
-                placeholder="developer@company.com"
+                placeholder="you@example.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-[#FCFCFA] border border-[#DCDCD2] rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-1 focus:ring-amber-500 focus:border-amber-500 focus:outline-none transition-all"
+                className="w-full bg-neutral-950 border border-neutral-800 text-white rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-1 focus:ring-neutral-700 focus:border-neutral-700 focus:outline-none transition-all"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-1">Key Phrase / Password</label>
+            <label className="block text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Password</label>
             <div className="relative">
-              <Key className="absolute left-3.5 top-3 w-4 h-4 text-neutral-400" />
+              <Key className="absolute left-3.5 top-3 w-4 h-4 text-neutral-500" />
               <input
                 type="password"
-                placeholder="••••••••••••"
+                placeholder="••••••••"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#FCFCFA] border border-[#DCDCD2] rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-1 focus:ring-amber-500 focus:border-amber-500 focus:outline-none transition-all"
+                className="w-full bg-neutral-950 border border-neutral-800 text-white rounded-xl py-2 pl-10 pr-4 text-xs focus:ring-1 focus:ring-neutral-700 focus:border-neutral-700 focus:outline-none transition-all"
               />
             </div>
           </div>
@@ -185,17 +174,17 @@ export default function LoginGate({ onGuestLogin }: LoginGateProps) {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-[#191919] hover:bg-[#2c2c2c] active:bg-black text-white disabled:bg-neutral-300 font-sans font-medium py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all mt-2 cursor-pointer shadow-sm"
+            className="w-full bg-neutral-100 hover:bg-neutral-200 active:bg-white text-neutral-950 disabled:bg-neutral-800 disabled:text-neutral-500 font-sans font-medium py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all mt-2 cursor-pointer shadow-sm"
             id="auth-submit-btn"
           >
-            {isLoading ? 'Decrypting Connection...' : isSignUp ? 'Generate Agent Credentials' : 'Initialize Terminal Link'}
+            {isLoading ? 'Processing...' : isSignUp ? 'Create Account' : 'Sign In'}
           </button>
         </form>
 
         <div className="mt-6 flex items-center justify-between gap-4">
-          <div className="h-[1px] bg-[#E2E2D5] flex-1" />
-          <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">Alternative</span>
-          <div className="h-[1px] bg-[#E2E2D5] flex-1" />
+          <div className="h-[1px] bg-neutral-800 flex-1" />
+          <span className="text-[10px] text-neutral-500 uppercase tracking-wider font-mono">or</span>
+          <div className="h-[1px] bg-neutral-800 flex-1" />
         </div>
 
         {/* Alternative safe links */}
@@ -203,28 +192,23 @@ export default function LoginGate({ onGuestLogin }: LoginGateProps) {
           <button
             onClick={handleGoogleAuth}
             disabled={isLoading}
-            className="flex items-center justify-center gap-2 py-2 px-4 bg-[#F5F5F0] hover:bg-[#EFECE3] border border-[#DCDCD2] rounded-xl text-xs font-medium text-neutral-700 transition-all cursor-pointer"
+            className="flex items-center justify-center gap-2 py-2 px-4 bg-neutral-950 hover:bg-neutral-800/80 border border-neutral-800 rounded-xl text-xs font-medium text-neutral-300 transition-all cursor-pointer"
             id="auth-google-btn"
           >
-            <Cpu className="w-3.5 h-3.5 text-neutral-500" />
+            <Cpu className="w-3.5 h-3.5 text-neutral-400" />
             Google
           </button>
 
           <button
             onClick={onGuestLogin}
             disabled={isLoading}
-            className="flex items-center justify-center gap-2 py-2 px-4 bg-[#F2ECD9] hover:bg-[#EBE3C8] border border-[#DDD6BA] rounded-xl text-xs font-semibold text-amber-900 transition-all cursor-pointer"
+            className="flex items-center justify-center gap-2 py-2 px-4 bg-neutral-800 hover:bg-neutral-700/80 border border-neutral-700 rounded-xl text-xs font-semibold text-neutral-200 transition-all cursor-pointer"
             id="auth-guest-btn"
           >
-            <Radio className="w-3.5 h-3.5 text-amber-700" />
-            Local Bypass
+            <Radio className="w-3.5 h-3.5 text-cyan-400" />
+            Guest Access
           </button>
         </div>
-
-        <p className="text-[10px] text-center text-neutral-400 font-mono mt-8 leading-relaxed uppercase tracking-wide">
-          Secured Workspace Environment.<br />
-          Compatible with cross-platform clients.
-        </p>
       </motion.div>
     </div>
   );

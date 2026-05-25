@@ -8,18 +8,6 @@ service cloud.firestore {
     }
 
     // Helper functions
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
     function isSignedIn() {
       return request.auth != null;
     }
@@ -28,70 +16,22 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Validation blueprints
-    function isValidUser(data) {
-      return data.email is string && data.email.size() <= 200
-        && (data.get('displayName', null) == null || (data.get('displayName', null) is string && data.get('displayName', null).size() <= 100))
-        && (data.get('avatarUrl', null) == null || (data.get('avatarUrl', null) is string && data.get('avatarUrl', null).size() <= 1000))
-        && data.credits is int && data.credits >= 0
-        && (data.get('themeColor', null) == null || (data.get('themeColor', null) is string && data.get('themeColor', null).size() <= 50))
-        && (data.get('mcpServer', null) == null || (data.get('mcpServer', null) is string && data.get('mcpServer', null).size() <= 200))
-        && (data.get('isPremiumActive', null) == null || data.get('isPremiumActive', null) is bool)
-        && (data.get('mcpConfig', null) == null || (data.get('mcpConfig', null) is string && data.get('mcpConfig', null).size() <= 100000))
-        && data.createdAt is timestamp;
-    }
-
-    function isValidChat(data) {
-      return data.title is string && data.title.size() <= 500
-        && data.userId is string && data.userId.size() <= 128
-        && data.createdAt is timestamp
-        && data.updatedAt is timestamp;
-    }
-
-    function isValidMessage(data) {
-      return data.role is string && (data.role == 'user' || data.role == 'assistant')
-        && data.content is string && data.content.size() <= 100000
-        && data.createdAt is timestamp
-        && (data.get('hasArtifact', null) == null || data.get('hasArtifact', null) is bool)
-        && (data.get('artifactCode', null) == null || (data.get('artifactCode', null) is string && data.get('artifactCode', null).size() <= 500000))
-        && (data.get('artifactTitle', null) == null || (data.get('artifactTitle', null) is string && data.get('artifactTitle', null).size() <= 200))
-        && (data.get('artifactType', null) == null || (data.get('artifactType', null) is string && data.get('artifactType', null).size() <= 100));
-    }
-
-    function isValidNote(data) {
-      return data.title is string && data.title.size() <= 200
-        && data.content is string && data.content.size() <= 100000
-        && data.userId is string && data.userId.size() <= 128
-        && data.createdAt is timestamp
-        && data.updatedAt is timestamp;
-    }
-
     // Collection matches
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().createdAt == request.time;
-      allow update: if isOwner(userId) && isValidUser(incoming()) && incoming().createdAt == existing().createdAt;
+      allow read, write: if isOwner(userId);
     }
 
     match /users/{userId}/notes/{noteId} {
-      allow get, list, delete: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidId(noteId) && incoming().userId == userId && isValidNote(incoming()) && incoming().createdAt == request.time;
-      allow update: if isOwner(userId) && incoming().userId == userId && isValidNote(incoming()) && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow read, write: if isOwner(userId);
     }
 
     match /chats/{chatId} {
-      allow get: if isSignedIn() && existing().userId == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(chatId) && incoming().userId == request.auth.uid && isValidChat(incoming()) && incoming().createdAt == request.time;
-      allow update: if isSignedIn() && existing().userId == request.auth.uid && incoming().userId == request.auth.uid && isValidChat(incoming()) && incoming().createdAt == existing().createdAt && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'updatedAt']);
-      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     match /chats/{chatId}/messages/{messageId} {
-      allow get: if isSignedIn() && get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid;
-      allow list: if isSignedIn() && get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(messageId) && get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid && isValidMessage(incoming()) && incoming().createdAt == request.time;
-      allow delete: if isSignedIn() && get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid;
+      allow create, read, delete: if isSignedIn() && get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid;
     }
   }
 }

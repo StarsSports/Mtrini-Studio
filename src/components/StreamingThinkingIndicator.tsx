@@ -49,7 +49,7 @@ export default function StreamingThinkingIndicator({ themeColors }: StreamingThi
       </div>
 
       {/* Handcrafted AI-Indicator Board */}
-      <div className="w-full bg-white border border-[#E6DCD0] rounded-xl p-4 shadow-3xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="w-full bg-[#0a0a0c] border border-neutral-850 rounded-xl p-4 shadow-3xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Core Mind details */}
         <div className="flex items-center gap-3.5">
           {/* Animated Glowing Mind Orb */}
@@ -63,11 +63,11 @@ export default function StreamingThinkingIndicator({ themeColors }: StreamingThi
           </div>
 
           <div className="space-y-1">
-            <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block leading-none select-none">
+            <span className="text-[10px] font-mono text-neutral-455 uppercase tracking-widest block leading-none select-none">
               Cognitive Pipeline
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-neutral-800 tracking-tight transition-all duration-300">
+              <span className="text-xs font-bold text-neutral-200 tracking-tight transition-all duration-300">
                 {THINKING_STEPS[stepIndex].text}
               </span>
             </div>
@@ -77,13 +77,13 @@ export default function StreamingThinkingIndicator({ themeColors }: StreamingThi
         {/* Dynamic Micro-Progress Activity */}
         <div className="flex items-center gap-3">
           {/* Bouncing Triple-Dots */}
-          <div className="flex gap-1 py-1.5 px-3 bg-neutral-50 border border-neutral-100 rounded-lg shadow-inner select-none">
+          <div className="flex gap-1 py-1.5 px-3 bg-neutral-950 border border-neutral-850 rounded-lg shadow-inner select-none">
             <div className={`w-1.5 h-1.5 rounded-full ${themeColors.text} bg-current animate-bounce shrink-0`} style={{ animationDelay: '0ms' }} />
             <div className={`w-1.5 h-1.5 rounded-full ${themeColors.text} bg-current animate-bounce shrink-0`} style={{ animationDelay: '150ms' }} />
             <div className={`w-1.5 h-1.5 rounded-full ${themeColors.text} bg-current animate-bounce shrink-0`} style={{ animationDelay: '300ms' }} />
           </div>
 
-          <div className="h-4 w-[1px] bg-neutral-200 hidden md:block" />
+          <div className="h-4 w-[1px] bg-neutral-805 hidden md:block" />
 
           {/* Activity State Badge */}
           <span className={`text-[9px] uppercase font-mono font-bold ${themeColors.bg} ${themeColors.text} tracking-wider px-2 py-1 rounded border ${themeColors.border} select-none`}>

@@ -34,53 +34,53 @@ import StartMenuModal from './components/StartMenuModal';
 
 const THEME_COLORS_MAP: Record<string, ThemeColors> = {
   cyan: {
-    primary: 'bg-cyan-600 hover:bg-cyan-700 text-white shadow-3xs',
+    primary: 'bg-cyan-500 hover:bg-cyan-600 text-neutral-950 font-bold shadow-sm',
     glow: 'cyan',
-    border: 'border-cyan-200',
-    bg: 'bg-cyan-50/50',
-    text: 'text-cyan-600',
-    glowClass: 'bg-cyan-50/75 border-cyan-150',
-    ring: 'focus:ring-cyan-600 focus:border-cyan-600',
+    border: 'border-cyan-950/40',
+    bg: 'bg-cyan-950/20',
+    text: 'text-cyan-400',
+    glowClass: 'bg-cyan-950/30 border-cyan-900/40',
+    ring: 'focus:ring-cyan-500 focus:border-cyan-500',
     hoverBorder: 'hover:border-cyan-500/50'
   },
   emerald: {
-    primary: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-3xs',
+    primary: 'bg-emerald-500 hover:bg-emerald-600 text-neutral-950 font-bold shadow-sm',
     glow: 'emerald',
-    border: 'border-emerald-200',
-    bg: 'bg-emerald-50/50',
-    text: 'text-emerald-600',
-    glowClass: 'bg-emerald-50/75 border-emerald-150',
-    ring: 'focus:ring-emerald-600 focus:border-emerald-600',
+    border: 'border-emerald-950/40',
+    bg: 'bg-emerald-950/20',
+    text: 'text-emerald-400',
+    glowClass: 'bg-emerald-950/30 border-emerald-900/40',
+    ring: 'focus:ring-emerald-500 focus:border-emerald-500',
     hoverBorder: 'hover:border-emerald-500/50'
   },
   crimson: {
-    primary: 'bg-rose-600 hover:bg-rose-700 text-white shadow-3xs',
+    primary: 'bg-rose-500 hover:bg-rose-600 text-neutral-950 font-bold shadow-sm',
     glow: 'rose',
-    border: 'border-rose-200',
-    bg: 'bg-rose-50/50',
-    text: 'text-rose-600',
-    glowClass: 'bg-rose-50/75 border-rose-150',
-    ring: 'focus:ring-rose-600 focus:border-rose-600',
+    border: 'border-rose-950/40',
+    bg: 'bg-rose-950/20',
+    text: 'text-rose-400',
+    glowClass: 'bg-rose-950/30 border-rose-900/40',
+    ring: 'focus:ring-rose-500 focus:border-rose-500',
     hoverBorder: 'hover:border-rose-500/50'
   },
   amber: {
-    primary: 'bg-amber-600 hover:bg-amber-700 text-white shadow-3xs',
+    primary: 'bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold shadow-sm',
     glow: 'amber',
-    border: 'border-amber-200',
-    bg: 'bg-amber-50/50',
-    text: 'text-amber-700',
-    glowClass: 'bg-amber-50/75 border-amber-150',
-    ring: 'focus:ring-amber-600 focus:border-amber-600',
+    border: 'border-amber-950/40',
+    bg: 'bg-amber-950/20',
+    text: 'text-amber-400',
+    glowClass: 'bg-amber-950/30 border-amber-900/40',
+    ring: 'focus:ring-amber-500 focus:border-amber-500',
     hoverBorder: 'hover:border-amber-500/50'
   },
   violet: {
-    primary: 'bg-violet-600 hover:bg-violet-700 text-white shadow-3xs',
+    primary: 'bg-violet-500 hover:bg-violet-600 text-neutral-950 font-bold shadow-sm',
     glow: 'violet',
-    border: 'border-violet-200',
-    bg: 'bg-violet-50/50',
-    text: 'text-violet-600',
-    glowClass: 'bg-violet-50/75 border-violet-150',
-    ring: 'focus:ring-violet-600 focus:border-violet-600',
+    border: 'border-violet-950/40',
+    bg: 'bg-violet-950/20',
+    text: 'text-violet-400',
+    glowClass: 'bg-violet-950/30 border-violet-900/40',
+    ring: 'focus:ring-violet-500 focus:border-violet-500',
     hoverBorder: 'hover:border-violet-500/50'
   }
 };
@@ -100,6 +100,20 @@ export default function App() {
   // Unified Profile State
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
+  // Dark / Light color mode
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('mtrini_color_theme_mode');
+    return saved ? saved === 'dark' : true;
+  });
+
+  const handleToggleThemeMode = () => {
+    setDarkMode(prev => {
+      const next = !prev;
+      localStorage.setItem('mtrini_color_theme_mode', next ? 'dark' : 'light');
+      return next;
+    });
+  };
+  
   // Custom overriding API key cached in browser localstorage
   const [localApiKey, setLocalApiKey] = useState(() => localStorage.getItem('mtrini_api_key') || '');
 
@@ -110,9 +124,14 @@ export default function App() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
+  const [selectedArtifactMessageId, setSelectedArtifactMessageId] = useState<string | null>(null);
   
   // SSE Streaming engine parameters
   const [streaming, setStreaming] = useState(false);
+
+  useEffect(() => {
+    setSelectedArtifactMessageId(null);
+  }, [activeChatId]);
   const abortControllerRef = React.useRef<AbortController | null>(null);
   const activeChatIdRef = React.useRef<string | null>(null);
   const streamingRef = React.useRef(false);
@@ -138,6 +157,7 @@ export default function App() {
   // Models and Thinking modes state (Claude aesthetic integration)
   const [selectedModel, setSelectedModel] = useState<'mtrini_1_0' | 'mtrini_1_1'>('mtrini_1_0');
   const [selectedThinking, setSelectedThinking] = useState<'fast' | 'deep' | 'short'>('fast');
+  const [chatMode, setChatMode] = useState<'mtrini' | 'mtrini-code'>('mtrini');
 
   // Onboarding auto-launch effect
   useEffect(() => {
@@ -312,8 +332,7 @@ export default function App() {
       const path = 'chats';
       const q = query(
         collection(db, 'chats'), 
-        where('userId', '==', userProfile.uid),
-        orderBy('updatedAt', 'desc')
+        where('userId', '==', userProfile.uid)
       );
       const unsub = onSnapshot(q, (snapshot) => {
         const threads: ChatThread[] = [];
@@ -326,6 +345,12 @@ export default function App() {
             createdAt: data.createdAt,
             updatedAt: data.updatedAt
           });
+        });
+        // Sort in memory by updatedAt desc (handling Firebase timestamps and normal Date or null fallbacks)
+        threads.sort((a, b) => {
+          const tA = a.updatedAt?.seconds || (a.updatedAt instanceof Date ? a.updatedAt.getTime() / 1000 : 0);
+          const tB = b.updatedAt?.seconds || (b.updatedAt instanceof Date ? b.updatedAt.getTime() / 1000 : 0);
+          return tB - tA;
         });
         setChatThreads(threads);
         if (threads.length > 0 && !activeChatIdRef.current) {
@@ -383,7 +408,7 @@ export default function App() {
   const handleNewChat = async () => {
     if (!userProfile) return;
 
-    const threadTitle = 'Mtrini Code Node - ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const threadTitle = 'New Discussion';
 
     if (isGuest) {
       const newThread: ChatThread = {
@@ -480,6 +505,22 @@ export default function App() {
     }
   };
 
+  const handleExportChat = () => {
+    if (messages.length === 0) return;
+    const markdownContent = messages.map(m => {
+      const title = m.role === 'user' ? '### User Question' : '### Mtrini Response';
+      return `${title}\n\n${m.content}\n\n---\n`;
+    }).join('\n');
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `mtrini_session_${activeChatId || 'export'}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleUpdateApiKey = (newKey: string) => {
     setLocalApiKey(newKey);
     localStorage.setItem('mtrini_api_key', newKey);
@@ -541,9 +582,16 @@ export default function App() {
 
     let currentActiveId = activeChatId;
 
+    // Clean and compress text to derive an elegant, crisp topic title
+    let cleanTitle = text.trim().replace(/\s+/g, ' ');
+    cleanTitle = cleanTitle.replace(/^[\s#*`>-\d.]+/g, '');
+    if (cleanTitle.length > 28) {
+      cleanTitle = cleanTitle.substring(0, 28).trim() + '...';
+    }
+    const threadTitle = cleanTitle || 'Saved Discussion';
+
     // Auto-create thread in the background if typing without active conversation node
     if (!currentActiveId) {
-      const threadTitle = text.length > 25 ? text.substring(0, 25) + '...' : text;
       if (isGuest) {
         currentActiveId = 'guest_chat_' + Date.now();
         const newThread: ChatThread = {
@@ -589,13 +637,14 @@ export default function App() {
 
     if (isGuest) {
       localStorage.setItem(`mtrini_guest_msgs_${currentActiveId}`, JSON.stringify(updatedHistory));
-      // Update thread title based on the first query
+      // Update thread title based on the first query topic
       if (messages.length === 0) {
-        const promptSnippet = text.length > 25 ? text.substring(0, 25) + '...' : text;
         const threadIndex = chatThreads.findIndex(t => t.id === currentActiveId);
         if (threadIndex !== -1) {
-          chatThreads[threadIndex].title = promptSnippet;
-          localStorage.setItem('mtrini_guest_threads', JSON.stringify([...chatThreads]));
+          const updatedThreads = [...chatThreads];
+          updatedThreads[threadIndex].title = threadTitle;
+          setChatThreads(updatedThreads);
+          localStorage.setItem('mtrini_guest_threads', JSON.stringify(updatedThreads));
         }
       }
     } else {
@@ -607,9 +656,15 @@ export default function App() {
           content: newUserMsg.content,
           createdAt: serverTimestamp()
         });
-        await updateDoc(doc(db, 'chats', currentActiveId), {
+        
+        const updatePayload: any = {
           updatedAt: serverTimestamp()
-        });
+        };
+        // Change conversation title to reflect topic
+        if (messages.length === 0) {
+          updatePayload.title = threadTitle;
+        }
+        await updateDoc(doc(db, 'chats', currentActiveId), updatePayload);
       } catch (err: any) {
         handleFirestoreError(err, OperationType.CREATE, path);
       }
@@ -655,7 +710,13 @@ export default function App() {
             mcpUrl: userProfile.mcpServer || '',
             selectedModel,
             selectedThinking,
-            localApiKey
+            localApiKey,
+            chatMode,
+            userProfile: {
+              preferredName: userProfile.preferredName,
+              displayName: userProfile.displayName,
+              aboutMe: userProfile.aboutMe
+            }
           }),
           signal: controller.signal
         });
@@ -759,26 +820,28 @@ export default function App() {
 
       if (isFallback && (localApiKey?.trim() || getFrontendFallbackKey())) {
         const modelName = selectedModel === 'mtrini_1_1' ? 'gemini-3.1-pro-preview' : 'gemini-3.5-flash';
-        const systemPrompt = `You are "Mtrini 1.0", a premium, top-tier Senior Developer AI Engine specializing in high-fidelity full-stack web applications and complex system scripting. 
-YOUR OBJECTIVES:
-1. Generate clean, modular, production-grade code adhering to modern TypeScript, React, and Tailwind best practices.
-2. Prioritize architectural efficiency: avoid over-engineering, ensure strict adherence to single-responsibility principles, and proactively minimize complexity.
-3. Be concise. Deliver objective, technical, and actionable responses.
-RESTRICTIONS:
-- DO NOT USE EMOJIS. Strict prohibition.
-- Only output essential, context-rich prose.
-- Output substantial code inside [ARTIFACT title="..." language="..."]CODE[/ARTIFACT] blocks. 
-- You are a Moroccan-born master craftsman in digital architecture: precision, efficiency, and structural integrity are your hallmarks.
+        const activeUserPreferred = userProfile?.preferredName || userProfile?.displayName || 'User Node';
+        const activeUserBio = userProfile?.aboutMe ? `Context about the User: ${userProfile.aboutMe}` : '';
 
-Roblox Direct Action Tool Trigger Protocol:
-- If the user explicitly asks you to create a part, write a script, search assets, insert a model, run tests, read structure, or set properties in their Roblox session, ALWAYS append a specific, parsed tag at the end of your message:
-  [ROBLOX_TOOL_CALL name="TOOL_NAME" args='JSON_STRING']
-- Standard schema examples:
-  - Spawn Part: [ROBLOX_TOOL_CALL name="roblox_create_part" args='{"className":"Part", "Name":"GeneratedPart", "Position":[0,10,0], "Size":[4,1,4], "Color":"Bright red", "Material":"Neon"}']
-  - Search Asset: [ROBLOX_TOOL_CALL name="roblox_toolbox_search" args='{"query":"sofa"}']
-  - Insert Asset: [ROBLOX_TOOL_CALL name="roblox_insert_model" args='{"assetId":"991823"}']
-  - Write Script: [ROBLOX_TOOL_CALL name="roblox_write_script" args='{"scriptName":"GameScript", "content":"print(\"Script added!\")", "parent":"Workspace"}']
-  - Change Property: [ROBLOX_TOOL_CALL name="roblox_set_property" args='{"instancePath":"Workspace.GeneratedPart", "propertyName":"Transparency", "value":0.5}']`;
+        const systemPrompt = chatMode === 'mtrini-code' ? `You are "Mtrini" (operating in specialized Mtrini Code Mode), an elite coding specialist and Senior software developer AI. 
+CORE OBJECTIVES:
+1. Generate extremely clean, highly optimized, secure, and production-ready code adhering to modern web frameworks (React, Vite, HTML5, TypeScript, Tailwind CSS).
+2. Avoid over-engineering; keep modules decoupled, easy to follow, and robust.
+3. Skip talkative introductions or conversational fillers; dive directly into high-fidelity technical specs and code artifacts.
+4. Strictly do NOT use emojis.
+5. Wrap comprehensive files or scripts exceeding 10 lines in [ARTIFACT title="..." language="..."]CODE[/ARTIFACT] blocks.
+
+User Node Identity: Please address the user as "${activeUserPreferred}".
+${activeUserBio}` 
+: `You are "Mtrini", a premium, friendly, and highly versatile AI companion companion node.
+CORE OBJECTIVES:
+1. You are optimized for standard communication: explaining complex topics, drafting essays, translating ideas, researching inquiries, and providing deep cognitive help.
+2. Keep an objective, supportive, and balanced tone.
+3. Strictly do NOT use emojis.
+4. Wrap comprehensive blocks of code or files in [ARTIFACT title="..." language="..."]CODE[/ARTIFACT] blocks if they occur.
+
+User Node Identity: Please address the user as "${activeUserPreferred}".
+${activeUserBio}`;
 
         const geminiContents = updatedHistory.map(m => ({
           role: m.role === 'assistant' ? 'model' : 'user',
@@ -916,7 +979,9 @@ Roblox Direct Action Tool Trigger Protocol:
   const activeThemeProps = THEME_COLORS_MAP[userProfile.themeColor] || THEME_COLORS_MAP.cyan;
 
   return (
-    <div className="h-screen w-screen bg-neutral-50 text-neutral-900 overflow-hidden flex flex-row selection:bg-neutral-200 selection:text-neutral-950">
+    <div className={`h-screen w-screen overflow-hidden flex flex-row selection:bg-neutral-800 selection:text-white transition-all duration-200 ${
+      darkMode ? 'bg-neutral-950 text-neutral-100' : 'bg-[#fafaf8] text-neutral-900'
+    }`}>
       {/* 1. Left Navigation System Panel */}
       <Sidebar
         chatThreads={chatThreads}
@@ -931,6 +996,8 @@ Roblox Direct Action Tool Trigger Protocol:
         userProfile={userProfile}
         themeColors={activeThemeProps}
         onDeleteChat={handleDeleteChat}
+        darkMode={darkMode}
+        onToggleThemeMode={handleToggleThemeMode}
       />
 
       {/* 2. Central Dual Panel Workspace System */}
@@ -950,6 +1017,11 @@ Roblox Direct Action Tool Trigger Protocol:
         selectedThinking={selectedThinking}
         onSelectThinking={setSelectedThinking}
         onClearMessages={handleClearMessages}
+        chatMode={chatMode}
+        onSelectChatMode={setChatMode}
+        selectedArtifactMessageId={selectedArtifactMessageId}
+        onSelectArtifactMessageId={setSelectedArtifactMessageId}
+        darkMode={darkMode}
       />
 
       {/* 3. Settings Control Desk sliding Drawer */}
@@ -968,8 +1040,14 @@ Roblox Direct Action Tool Trigger Protocol:
               isOpen={isPreferencesOpen}
               onClose={() => setIsPreferencesOpen(false)}
               userProfile={userProfile}
-              onUpdatePreferences={handleUpdatePreferences}
               themeColors={activeThemeProps}
+              messages={messages}
+              selectedArtifactMessageId={selectedArtifactMessageId}
+              onSelectArtifactMessageId={setSelectedArtifactMessageId}
+              onResetChat={handleClearMessages}
+              onExportChat={handleExportChat}
+              darkMode={darkMode}
+              onUpdatePreferences={handleUpdatePreferences}
               localApiKey={localApiKey}
               onUpdateApiKey={handleUpdateApiKey}
             />

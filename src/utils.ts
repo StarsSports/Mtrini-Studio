@@ -8,46 +8,53 @@ export interface ParsedMessage {
 
 /**
  * Parses message content to strip and isolate code artifacts.
- * Supports active streams by parsing open tags gracefully.
+ * Supports both custom [ARTIFACT ...] tags and typical markdown triple-backtick code blocks.
+ * If a code block is identified, we separate the text (prose) from the code,
+ * so that we show a sleek, clickable box instead of generating the whole code in-line.
  */
 export function parseMessageArtifacts(content: string): ParsedMessage {
   if (!content) return { prose: '', hasArtifact: false };
 
+  // 1. Try custom [ARTIFACT ...] format first
   const startTagIndex = content.indexOf('[ARTIFACT');
-  if (startTagIndex === -1) {
-    return { prose: content, hasArtifact: false };
-  }
+  if (startTagIndex !== -1) {
+    const prose = content.substring(0, startTagIndex).trim();
+    const tagContent = content.substring(startTagIndex);
 
-  const prose = content.substring(0, startTagIndex).trim();
-  const tagContent = content.substring(startTagIndex);
+    // Match title="name" and language="lang"
+    const titleMatch = tagContent.match(/title="([^"]*)"/);
+    const langMatch = tagContent.match(/language="([^"]*)"/);
+    
+    const artifactTitle = titleMatch ? titleMatch[1] : 'script.txt';
+    const artifactLanguage = langMatch ? langMatch[1] : 'text';
 
-  // Match title="name" and language="lang"
-  const titleMatch = tagContent.match(/title="([^"]*)"/);
-  const langMatch = tagContent.match(/language="([^"]*)"/);
-  
-  const artifactTitle = titleMatch ? titleMatch[1] : 'script.txt';
-  const artifactLanguage = langMatch ? langMatch[1] : 'text';
+    // Find where the starting tag ends
+    const closingBracketOfStartTag = tagContent.indexOf(']');
+    if (closingBracketOfStartTag === -1) {
+      return {
+        prose,
+        hasArtifact: true,
+        artifactTitle,
+        artifactLanguage,
+        artifactCode: 'Compiler handshaking...'
+      };
+    }
 
-  // Find where the starting tag ends
-  const closingBracketOfStartTag = tagContent.indexOf(']');
-  if (closingBracketOfStartTag === -1) {
-    // Tag is still being typed out
-    return {
-      prose,
-      hasArtifact: true,
-      artifactTitle,
-      artifactLanguage,
-      artifactCode: 'Compiler handshaking...'
-    };
-  }
+    const codeStart = closingBracketOfStartTag + 1;
+    const endTagIndex = tagContent.indexOf('[/ARTIFACT]');
 
-  // Code body starts right after the start tag closing bracket
-  const codeStart = closingBracketOfStartTag + 1;
-  const endTagIndex = tagContent.indexOf('[/ARTIFACT]');
+    if (endTagIndex === -1) {
+      const artifactCode = tagContent.substring(codeStart).trim();
+      return {
+        prose,
+        hasArtifact: true,
+        artifactTitle,
+        artifactLanguage,
+        artifactCode
+      };
+    }
 
-  if (endTagIndex === -1) {
-    // Code block is currently streaming
-    const artifactCode = tagContent.substring(codeStart).trim();
+    const artifactCode = tagContent.substring(codeStart, endTagIndex).trim();
     return {
       prose,
       hasArtifact: true,
@@ -57,15 +64,33 @@ export function parseMessageArtifacts(content: string): ParsedMessage {
     };
   }
 
-  // Complete closed block
-  const artifactCode = tagContent.substring(codeStart, endTagIndex).trim();
-  return {
-    prose,
-    hasArtifact: true,
-    artifactTitle,
-    artifactLanguage,
-    artifactCode
-  };
+  // 2. Fall back to standard markdown style code block detection (```lang ... ```)
+  const markdownBlockRegex = /```(\w*)\n([\s\S]*?)(?:```|$)/;
+  const match = content.match(markdownBlockRegex);
+  if (match) {
+    const matchedLanguage = match[1] || 'html';
+    const matchedCode = match[2] || '';
+    
+    // Split prose and code
+    const mathIdx = content.indexOf('```');
+    const prose = content.substring(0, mathIdx).trim();
+    
+    // Infer a meaningful title
+    let artifactTitle = 'script.' + (matchedLanguage === 'javascript' ? 'js' : matchedLanguage === 'typescript' ? 'ts' : matchedLanguage === 'python' ? 'py' : matchedLanguage || 'txt');
+    if (matchedCode.includes('<!DOCTYPE html>') || matchedCode.includes('<html') || matchedCode.includes('<body>')) {
+      artifactTitle = 'index.html';
+    }
+
+    return {
+      prose,
+      hasArtifact: true,
+      artifactTitle,
+      artifactLanguage: matchedLanguage,
+      artifactCode: matchedCode
+    };
+  }
+
+  return { prose: content, hasArtifact: false };
 }
 
 /**
@@ -81,40 +106,4 @@ export function downloadFile(filename: string, content: string) {
   document.body.removeChild(element);
 }
 
-export interface RobloxToolCall {
-  name: string;
-  arguments: any;
-}
 
-/**
- * Parses out [ROBLOX_TOOL_CALL name="..." args='...'] from a message
- */
-export function parseRobloxToolCall(content: string): RobloxToolCall | null {
-  if (!content) return null;
-  const match = content.match(/\[ROBLOX_TOOL_CALL\s+name="([^"]*)"\s+args='([^']*)'\]/i) || 
-                content.match(/\[ROBLOX_TOOL_CALL\s+name="([^"]*)"\s+args="([^"]*)"\]/i);
-  if (!match) return null;
-
-  try {
-    return {
-      name: match[1],
-      arguments: JSON.parse(match[2])
-    };
-  } catch (e) {
-    console.error("Failed to parse Roblox tool call arguments:", e);
-    return {
-      name: match[1],
-      arguments: {}
-    };
-  }
-}
-
-/**
- * Strips out the robo-tool call tags from user-facing responses
- */
-export function stripRobloxToolTag(content: string): string {
-  if (!content) return '';
-  return content.replace(/\[ROBLOX_TOOL_CALL\s+name="[^"]*"\s+args='[^']*'\]/gi, '')
-                .replace(/\[ROBLOX_TOOL_CALL\s+name="[^"]*"\s+args="[^"]*"\]/gi, '')
-                .trim();
-}

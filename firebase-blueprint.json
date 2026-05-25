@@ -54,6 +54,7 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "content", "userId", "createdAt", "updatedAt"]
+    }
   },
   "firestore": {
     "/users/{userId}": {

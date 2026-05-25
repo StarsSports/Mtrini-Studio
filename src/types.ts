@@ -13,6 +13,9 @@ export interface UserProfile {
   compilationSpeed?: 'fast' | 'balanced' | 'safe';
   shortcutsEnabled?: boolean;
   createdAt: Date;
+  preferredName?: string;
+  aboutMe?: string;
+  setupCompleted?: boolean;
 }
 
 export type ViewType = 'chat' | 'notes';

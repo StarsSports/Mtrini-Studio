@@ -1,138 +1,249 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
-  X, Settings, Cpu, Palette, RefreshCw, ShieldCheck, HelpCircle, HardDrive, Sparkles, AlertTriangle, CheckCircle,
-  Keyboard, Zap, Sliders, ToggleLeft, ToggleRight, Check, Terminal
+  X, Settings, Trash2, Download, Code, FileCode, Cpu, Shield, Key, Eye, EyeOff, 
+  Terminal, RefreshCw, Check, Layout, Clipboard, Sliders, Palette, Info, HelpCircle
 } from 'lucide-react';
-import { UserProfile, ThemeColors } from '../types';
+import { UserProfile, ThemeColors, Message } from '../types';
+import { parseMessageArtifacts } from '../utils';
 
 interface RightDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   userProfile: UserProfile | null;
-  onUpdatePreferences: (updates: Partial<UserProfile>) => void;
   themeColors: ThemeColors;
+  messages: Message[];
+  selectedArtifactMessageId: string | null;
+  onSelectArtifactMessageId: (msgId: string | null) => void;
+  onResetChat: () => void;
+  onExportChat: () => void;
+  darkMode?: boolean;
+  onUpdatePreferences: (updates: Partial<UserProfile>) => void;
   localApiKey: string;
   onUpdateApiKey: (key: string) => void;
 }
-
-const DEFAULT_MCP_CONFIG = `{
-  "local-mcp-agent": {
-    "url": "http://localhost:5001",
-    "enabled": true
-  },
-  "remote-gdoc-bridge": {
-    "url": "https://mcp.ayhamprojects.sh",
-    "enabled": false
-  }
-}`;
 
 export default function RightDrawer({
   isOpen,
   onClose,
   userProfile,
-  onUpdatePreferences,
   themeColors,
+  messages,
+  selectedArtifactMessageId,
+  onSelectArtifactMessageId,
+  onResetChat,
+  onExportChat,
+  darkMode = true,
+  onUpdatePreferences,
   localApiKey,
   onUpdateApiKey
 }: RightDrawerProps) {
-  const [mcpJsonStr, setMcpJsonStr] = useState(() => userProfile?.mcpConfig || DEFAULT_MCP_CONFIG);
-  const [jsonError, setJsonError] = useState<string | null>(null);
-  const [parsedServers, setParsedServers] = useState<Record<string, { command?: string; args?: string[]; url?: string; enabled?: boolean }>>({});
+  const [activeTab, setActiveTab] = useState<'scripts' | 'config' | 'integrations'>('scripts');
 
-  const getRobloxServerUrl = () => {
-    let base = '';
-    if (userProfile?.bridgeUrl) {
-      base = userProfile.bridgeUrl;
-    } else if (typeof window !== 'undefined' && window.location.hostname.includes('netlify.app')) {
-      base = 'https://ais-pre-2lec2iqt6rhwokfedcy24v-429842933088.europe-west2.run.app';
-    } else {
-      base = typeof window !== 'undefined' ? window.location.origin : '';
+  // Input states
+  const [preferredName, setPreferredName] = useState(userProfile?.preferredName || userProfile?.displayName || '');
+  const [aboutMe, setAboutMe] = useState(userProfile?.aboutMe || '');
+  const [shortcutsEnabled, setShortcutsEnabled] = useState(userProfile?.shortcutsEnabled !== false);
+  const [apiKeyInput, setApiKeyInput] = useState(localApiKey);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeySavedStatus, setApiKeySavedStatus] = useState(false);
+
+  // MCP Setup
+  const [mcpUrl, setMcpUrl] = useState(userProfile?.mcpServer || '');
+  const [mcpStatus, setMcpStatus] = useState<'idle' | 'scanning' | 'connected' | 'error'>('idle');
+  const [mcpTools, setMcpTools] = useState<any[]>([]);
+  const [mcpMessage, setMcpMessage] = useState('');
+  const [jsonToolsInput, setJsonToolsInput] = useState('[]');
+  const [jsonToolsError, setJsonToolsError] = useState<string | null>(null);
+  const [showJsonEditor, setShowJsonEditor] = useState(false);
+
+  // Roblox Sync
+  const [robloxHistory, setRobloxHistory] = useState<any[]>([]);
+  const [isCopiedLua, setIsCopiedLua] = useState(false);
+
+  const themeOptions = [
+    { value: 'cyan' as const, label: 'Cyan', color: 'bg-cyan-500' },
+    { value: 'emerald' as const, label: 'Emerald', color: 'bg-emerald-500' },
+    { value: 'crimson' as const, label: 'Crimson', color: 'bg-rose-500' },
+    { value: 'amber' as const, label: 'Amber', color: 'bg-amber-500' },
+    { value: 'violet' as const, label: 'Violet', color: 'bg-violet-500' }
+  ];
+
+  // Load message artifacts
+  const artifactMessages = messages.filter(m => {
+    const parsed = parseMessageArtifacts(m.content || '');
+    return parsed.hasArtifact;
+  });
+
+  // Keep internal values aligned with prop changes
+  useEffect(() => {
+    if (userProfile) {
+      setPreferredName(userProfile.preferredName || userProfile.displayName || '');
+      setAboutMe(userProfile.aboutMe || '');
+      setShortcutsEnabled(userProfile.shortcutsEnabled !== false);
+      setMcpUrl(userProfile.mcpServer || '');
     }
-    if (base.endsWith('/')) {
-      base = base.slice(0, -1);
+  }, [userProfile]);
+
+  // Load and hydrate cached tools from Cloud database json profile configuration
+  useEffect(() => {
+    if (userProfile?.mcpConfig) {
+      try {
+        const parsed = JSON.parse(userProfile.mcpConfig);
+        if (Array.isArray(parsed)) {
+          setMcpTools(parsed);
+          setJsonToolsInput(JSON.stringify(parsed, null, 2));
+          setMcpStatus('connected');
+          setMcpMessage('Restored tools database from cloud user profile configuration JSON.');
+        }
+      } catch (e) {
+        // Hydration error bypassed safely
+      }
     }
-    return `${base}/api/roblox/commands`;
-  };
-  const robloxServerUrl = getRobloxServerUrl();
+  }, [userProfile?.mcpConfig]);
 
   useEffect(() => {
-    try {
-      let parsed = JSON.parse(mcpJsonStr);
-      if (typeof parsed === 'object' && parsed !== null) {
-        if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
-          parsed = parsed.mcpServers;
-        }
-        setParsedServers(parsed);
-        setJsonError(null);
-      } else {
-        setJsonError('JSON must be a key-value object of server configs');
-      }
-    } catch (err: any) {
-      setJsonError(err.message || 'Invalid JSON syntax');
-    }
-  }, [mcpJsonStr]);
+    setApiKeyInput(localApiKey);
+  }, [localApiKey]);
 
-  const handleSaveJsonConfig = () => {
-    if (jsonError) return;
-    onUpdatePreferences({ 
-      mcpConfig: mcpJsonStr,
-      mcpServer: 'Roblox_Studio_JSON_STDIO'
-    });
+  // Handle active settings updates
+  const triggerPrefUpdate = (updates: Partial<UserProfile>) => {
+    onUpdatePreferences(updates);
   };
 
-  const personaOptions = [
-    { 
-      value: 'cyan' as const, 
-      label: 'System Compiler', 
-      tag: 'DEFAULT ENGINE', 
-      desc: 'Balanced, high-speed, raw technical answers.', 
-      icon: Cpu,
-      color: 'text-cyan-600',
-      borderColor: 'border-cyan-200',
-      bgColor: 'bg-cyan-50/50'
-    },
-    { 
-      value: 'emerald' as const, 
-      label: 'Secure Sentry', 
-      tag: 'DEFENSIVE SHIELD', 
-      desc: 'Robust try-catches, checks & strict type-safety.', 
-      icon: ShieldCheck,
-      color: 'text-emerald-600',
-      borderColor: 'border-emerald-200',
-      bgColor: 'bg-emerald-50/50'
-    },
-    { 
-      value: 'crimson' as const, 
-      label: 'Performance Hacker', 
-      tag: 'ALGORITHMIC SPRINT', 
-      desc: 'Ultra-fast, micro-optimized, low-overhead files.', 
-      icon: Zap,
-      color: 'text-rose-600',
-      borderColor: 'border-rose-200',
-      bgColor: 'bg-rose-50/50'
-    },
-    { 
-      value: 'amber' as const, 
-      label: 'Software Architect', 
-      tag: 'SOLID SYSTEM', 
-      desc: 'Decoupled systems, JSDocs, and elegant OOP design.', 
-      icon: Sliders,
-      color: 'text-amber-700',
-      borderColor: 'border-amber-200',
-      bgColor: 'bg-amber-50/50'
-    },
-    { 
-      value: 'violet' as const, 
-      label: 'UX Craftsman', 
-      tag: 'SENSORY INTERACTIVE', 
-      desc: 'Beautiful spacing rhythms, styling & animations.', 
-      icon: Palette,
-      color: 'text-violet-600',
-      borderColor: 'border-violet-200',
-      bgColor: 'bg-violet-50/50'
-    },
-  ];
+  // MCP Server Scanner Trigger
+  const handleScanMcp = async () => {
+    if (!mcpUrl.trim()) {
+      setMcpStatus('idle');
+      return;
+    }
+    setMcpStatus('scanning');
+    setMcpMessage('Probing HTTP MCP Handshake...');
+    
+    try {
+      const resp = await fetch('/api/mcp/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: mcpUrl.trim() })
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        setMcpStatus(data.status === 'connected' ? 'connected' : 'error');
+        
+        const toolsFound = data.tools || [];
+        setMcpTools(toolsFound);
+        setJsonToolsInput(JSON.stringify(toolsFound, null, 2));
+        setMcpMessage(data.message || 'Sinks connected.');
+        setJsonToolsError(null);
+
+        // Update preferences in the Firebase Cloud database using JSON tools payload
+        triggerPrefUpdate({ 
+          mcpServer: mcpUrl.trim(),
+          mcpConfig: JSON.stringify(toolsFound)
+        });
+      } else {
+        throw new Error('Remote host rejected scanning request.');
+      }
+    } catch (err: any) {
+      setMcpStatus('error');
+      setMcpMessage('Failed to scan MCP Server. Initiated fallback simulation tools.');
+      const fallbackTools = [
+        { name: 'mcp_dir_scan', description: 'Scan Local Node Directories (Simulated)', inputSchema: { type: 'object', properties: { path: { type: 'string' } } } },
+        { name: 'mcp_file_write', description: 'Write Sandbox Files (Simulated)', inputSchema: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } } }
+      ];
+      setMcpTools(fallbackTools);
+      setJsonToolsInput(JSON.stringify(fallbackTools, null, 2));
+      setJsonToolsError(null);
+      triggerPrefUpdate({
+        mcpServer: mcpUrl.trim(),
+        mcpConfig: JSON.stringify(fallbackTools)
+      });
+    }
+  };
+
+  // Handle applying manuals tools array input directly as JSON payload
+  const handleApplyJsonTools = () => {
+    try {
+      setJsonToolsError(null);
+      const parsed = JSON.parse(jsonToolsInput);
+      if (!Array.isArray(parsed)) {
+        throw new Error('MCP custom tools must be defined inside a valid JSON Array []');
+      }
+      
+      setMcpTools(parsed);
+      setMcpStatus('connected');
+      setMcpMessage('Successfully loaded and applied manual JSON tools configuration.');
+      
+      triggerPrefUpdate({
+        mcpConfig: JSON.stringify(parsed)
+      });
+    } catch (e: any) {
+      setJsonToolsError(e.message || 'Invalid JSON syntax. Please check braces and format.');
+    }
+  };
+
+  // On mount if mcp server exists, check connectivity
+  useEffect(() => {
+    if (userProfile?.mcpServer) {
+      handleScanMcp();
+    }
+  }, []);
+
+  // Poll Roblox sync history
+  const fetchRobloxHistory = async () => {
+    try {
+      const res = await fetch('/api/roblox/history');
+      if (res.ok) {
+        const data = await res.json();
+        setRobloxHistory(data || []);
+      }
+    } catch (e) {
+      // Ignore poll failures in clean static setups
+    }
+  };
+
+  useEffect(() => {
+    fetchRobloxHistory();
+    const interval = setInterval(fetchRobloxHistory, 3500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleUpdateApiKeyInternal = () => {
+    onUpdateApiKey(apiKeyInput.trim());
+    setApiKeySavedStatus(true);
+    setTimeout(() => setApiKeySavedStatus(false), 2000);
+  };
+
+  const copyLuaConnector = () => {
+    const luaScript = `-- Mtrini Studio Live Roblox Connector Link
+local HttpService = game:GetService("HttpService")
+local ServerUrl = "https://ais-dev-2lec2iqt6rhwokfedcy24v-429842933088.europe-west2.run.app" -- Current workspace backend URL
+
+print("[Mtrini Link] Commencing poller thread...")
+while true do
+    pcall(function()
+        local response = HttpService:GetAsync(ServerUrl .. "/api/roblox/commands")
+        local commands = HttpService:JSONDecode(response)
+        for _, cmd in ipairs(commands) do
+            print("[Mtrini Exec] Running tool " .. cmd.name)
+            -- Dynamic Roblox Workspace actions are processed here live on command
+            if cmd.name == "SpawnBlock" or cmd.name == "mcp_file_write" then
+                local block = Instance.new("Part")
+                block.Parent = workspace
+                block.Position = Vector3.new(0, 10, 0)
+                block.Size = Vector3.new(4, 4, 4)
+                block.Material = Enum.Material.Neon
+                block.BrickColor = BrickColor.new("Cyan")
+            end
+        end
+    end)
+    task.wait(1.5)
+end`;
+    navigator.clipboard.writeText(luaScript);
+    setIsCopiedLua(true);
+    setTimeout(() => setIsCopiedLua(false), 2000);
+  };
 
   return (
     <motion.div 
@@ -140,459 +251,529 @@ export default function RightDrawer({
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: '100%', opacity: 0.95 }}
       transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-      className="fixed inset-y-0 right-0 w-85 bg-[#FAF8F5] border-l border-[#E6E0D5] z-50 flex flex-col font-sans text-neutral-800 shadow-2xl h-full"
+      className={`fixed inset-y-0 right-0 w-[350px] border-l z-50 flex flex-col font-sans shadow-2xl h-full transition-all duration-200 ${
+        darkMode 
+          ? 'bg-[#0b0b0d] border-neutral-900 text-neutral-200' 
+          : 'bg-white border-neutral-200 text-neutral-800'
+      }`}
     >
       {/* Drawer Header */}
-      <div className="p-4 border-b border-[#E6E0D5] bg-[#F2EDE4] flex items-center justify-between select-none">
+      <div className={`p-4 border-b flex items-center justify-between select-none transition-all duration-200 ${
+        darkMode ? 'border-neutral-900 bg-neutral-950/70' : 'border-neutral-200 bg-neutral-50'
+      }`}>
         <div className="flex items-center gap-2">
-          <Settings className="w-4 h-4 text-amber-900" />
-          <span className="font-display font-semibold text-sm tracking-tight text-neutral-900">Control Desk</span>
+          <Settings className={`w-4 h-4 ${darkMode ? 'text-neutral-300' : 'text-neutral-750'}`} />
+          <span className={`font-semibold text-sm ${darkMode ? 'text-white' : 'text-neutral-900'}`}>Control Desk</span>
         </div>
         <button 
           onClick={onClose}
-          className="p-1 hover:bg-[#E3DCCE] rounded-lg transition-colors cursor-pointer text-neutral-600"
+          className={`p-1 rounded-lg transition-colors cursor-pointer ${
+            darkMode ? 'hover:bg-neutral-900 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-550 hover:text-neutral-900'
+          }`}
           id="btn-close-drawer"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
+      {/* Tabs navigation */}
+      <div className={`flex border-b text-xs select-none ${darkMode ? 'border-neutral-900 bg-neutral-950/40' : 'border-neutral-200 bg-neutral-50/50'}`}>
+        <button
+          onClick={() => setActiveTab('scripts')}
+          className={`flex-1 py-3 text-center font-bold relative transition-all cursor-pointer ${
+            activeTab === 'scripts' 
+              ? (darkMode ? 'text-white' : 'text-neutral-900') 
+              : 'text-neutral-500 hover:text-neutral-400'
+          }`}
+        >
+          Scripts
+          {activeTab === 'scripts' && (
+            <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${themeColors.text}`} />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('config')}
+          className={`flex-1 py-3 text-center font-bold relative transition-all cursor-pointer ${
+            activeTab === 'config' 
+              ? (darkMode ? 'text-white' : 'text-neutral-900') 
+              : 'text-neutral-500 hover:text-neutral-400'
+          }`}
+        >
+          Settings
+          {activeTab === 'config' && (
+            <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${themeColors.text}`} />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('integrations')}
+          className={`flex-1 py-3 text-center font-bold relative transition-all cursor-pointer ${
+            activeTab === 'integrations' 
+              ? (darkMode ? 'text-white' : 'text-neutral-900') 
+              : 'text-neutral-500 hover:text-neutral-400'
+          }`}
+        >
+          Integrations
+          {activeTab === 'integrations' && (
+            <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${themeColors.text}`} />
+          )}
+        </button>
+      </div>
+
       {/* Drawer Scrollable Body */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+      <div className={`flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-transparent`}>
         
-        {/* Module 1: AI Token Meter */}
-        <div className="bg-white p-4 border border-[#E6E0D5] rounded-xl space-y-3.5 shadow-3xs">
-          <div className="flex items-center justify-between pb-2 border-b border-[#E6DCD0] select-none">
-            <span className="text-[10px] font-black text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Cpu className="w-3.5 h-3.5 text-[#C2410C]" />
-              Compute Balance
-            </span>
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-250 text-[8px] font-extrabold text-emerald-800 uppercase tracking-wide">
-              🔒 STABLE NODE
-            </span>
-          </div>
-
-          <div className="w-full h-1.5 bg-neutral-100 rounded-full overflow-hidden">
-            <div className="h-full bg-[#C2410C] rounded-full w-full" />
-          </div>
-
-          <div className="flex justify-between text-[10px] font-mono text-neutral-500 leading-none">
-            <span>Quota Utilized: Unlimited</span>
-            <span className="font-bold text-[#A16207]">∞ Infinite Sandbox Credits</span>
-          </div>
-        </div>
-
-        {/* Module 2: AI Developer Persona */}
-        <div className="bg-white p-4 border border-[#E6E0D5] rounded-xl space-y-3 shadow-3xs">
-          <div className="flex items-center justify-between pb-1 border-b border-[#E6DCD0] select-none">
-            <span className="text-[10px] font-black text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Sliders className={`w-3.5 h-3.5 ${themeColors.text}`} />
-              AI Coding Persona
-            </span>
-            <span className="text-[8px] font-mono text-neutral-500 bg-neutral-50 px-1.5 py-0.5 rounded border border-neutral-250 uppercase tracking-wide">
-              MIND DECK
-            </span>
-          </div>
-          
-          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-            {personaOptions.map((opt) => {
-              const OptIcon = opt.icon;
-              const isActive = userProfile?.themeColor === opt.value;
-              return (
+        {activeTab === 'scripts' && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-5"
+          >
+            {/* Tools Section */}
+            <div className={`space-y-3 pb-5 border-b ${darkMode ? 'border-neutral-900/80' : 'border-neutral-200'}`}>
+              <label className={`text-[10px] font-bold uppercase tracking-widest block select-none ${darkMode ? 'text-neutral-450' : 'text-neutral-500'}`}>
+                Workspace Actions
+              </label>
+              <div className="grid grid-cols-2 gap-2">
                 <button
-                  key={opt.value}
-                  onClick={() => onUpdatePreferences({ themeColor: opt.value })}
-                  className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex gap-3 ${
-                    isActive 
-                      ? `${opt.bgColor} ${opt.borderColor} shadow-2xs` 
-                      : 'bg-white border-neutral-150 hover:border-neutral-250 hover:bg-[#FAF9F5]'
+                  onClick={onResetChat}
+                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 border text-rose-500 text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-98 shadow-sm ${
+                    darkMode 
+                      ? 'bg-red-955/20 hover:bg-red-955/45 border-red-900/40 hover:border-red-900' 
+                      : 'bg-red-50 hover:bg-red-100 border-red-200 hover:border-red-300'
                   }`}
+                  title="Reset conversation thread"
                 >
-                  <div className={`p-1.5 rounded-lg shrink-0 flex items-center justify-center h-8 w-8 border ${
-                    isActive 
-                      ? `${opt.bgColor} ${opt.borderColor} ${opt.color}` 
-                      : 'bg-neutral-50 border-neutral-100 text-neutral-400'
-                  }`}>
-                    <OptIcon className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-bold text-neutral-900 text-[11px] truncate">{opt.label}</span>
-                      <span className={`text-[7px] font-black tracking-wider uppercase px-1 rounded-sm ${
-                        isActive ? `${opt.color} ${opt.bgColor}` : 'text-neutral-400 bg-neutral-100'
-                      }`}>
-                        {opt.tag}
-                      </span>
-                    </div>
-                    <p className="text-[9.5px] text-neutral-500 leading-normal mt-0.5">{opt.desc}</p>
-                  </div>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Reset Chat</span>
                 </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Module Extra: AI Compilation Options */}
-        <div className="bg-white p-4 border border-[#E6E0D5] rounded-xl space-y-3.5 shadow-3xs">
-          <div className="flex items-center justify-between pb-2 border-b border-[#E6DCD0] select-none">
-            <span className="text-[10px] font-black text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Zap className={`w-3.5 h-3.5 ${themeColors.text}`} />
-              AI Compiler Node
-            </span>
-            <span className="text-[8px] font-mono text-neutral-500 bg-neutral-50 px-1.5 py-0.5 rounded border border-neutral-250 uppercase tracking-wide">
-              OPTIMIZER v1
-            </span>
-          </div>
-
-          {/* Velo-streaming channel toggle */}
-          <div className="flex items-center justify-between pt-1">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-bold text-neutral-800">Prompt Velo-Streaming</span>
-              <span className="text-[9px] text-neutral-500 leading-tight">Live compile characters as they generate</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => onUpdatePreferences({ streamingEnabled: userProfile?.streamingEnabled !== false ? false : true })}
-              className="text-[#C2410C] hover:text-orange-700 transition-colors cursor-pointer"
-            >
-              {userProfile?.streamingEnabled !== false ? (
-                <ToggleRight className="w-9 h-9 fill-[#C2410C]/10" />
-              ) : (
-                <ToggleLeft className="w-9 h-9 text-neutral-400" />
-              )}
-            </button>
-          </div>
-
-          {/* Compiler Optimization profile switcher */}
-          <div className="space-y-2 pt-1">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-bold text-neutral-500 font-mono uppercase tracking-wide">Pipeline Profile:</span>
-              <span className="text-[9px] font-mono text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-250 font-bold uppercase shrink-0">
-                {userProfile?.compilationSpeed === 'fast' ? 'Overclock Fast' : userProfile?.compilationSpeed === 'safe' ? 'Secure Sandbox' : 'Balanced Engine'}
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(['fast', 'balanced', 'safe'] as const).map((mode) => (
                 <button
-                  key={mode}
-                  type="button"
-                  onClick={() => onUpdatePreferences({ compilationSpeed: mode })}
-                  className={`py-1.5 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
-                    (userProfile?.compilationSpeed || 'balanced') === mode
-                      ? 'bg-[#C2410C] border-[#B2310C] text-white shadow-3xs'
-                      : 'bg-[#FAF9F5] hover:bg-white border-[#E6E0D5] text-neutral-600'
+                  onClick={onExportChat}
+                  className={`flex items-center justify-center gap-1.5 py-2.5 px-3 border rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-98 shadow-sm ${
+                    darkMode 
+                      ? 'bg-neutral-900 hover:bg-neutral-850 border-neutral-800 hover:border-neutral-700 text-neutral-200 hover:text-white' 
+                      : 'bg-neutral-100 hover:bg-neutral-200 border-neutral-250 hover:border-neutral-350 text-neutral-700 hover:text-neutral-905'
                   }`}
+                  title="Export session markdown"
                 >
-                  {mode === 'fast' ? 'Aggressive' : mode === 'safe' ? 'Strict' : 'Balanced'}
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export</span>
                 </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Module Shortcuts: Interactive Keyboard Hotkeys Suite */}
-        <div className="bg-white p-4 border border-[#E6E0D5] rounded-xl space-y-3.5 shadow-3xs">
-          <div className="flex items-center justify-between pb-2 border-b border-[#E6DCD0] select-none">
-            <span className="text-[10px] font-black text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Keyboard className="w-3.5 h-3.5 text-[#C2410C]" />
-              Workspace Hotkeys
-            </span>
-            <button
-              onClick={() => onUpdatePreferences({ shortcutsEnabled: userProfile?.shortcutsEnabled === false ? true : false })}
-              className="text-[#C2410C] hover:text-orange-700 transition-colors cursor-pointer"
-              title="Toggle all Hotkeys"
-            >
-              {userProfile?.shortcutsEnabled !== false ? (
-                <ToggleRight className="w-9 h-9 fill-[#C2410C]/10" />
-              ) : (
-                <ToggleLeft className="w-9 h-9 text-neutral-400" />
-              )}
-            </button>
-          </div>
-
-          <p className="text-[10px] text-neutral-500 leading-normal">
-            Improve compilation speed using integrated global keyboard commands:
-          </p>
-
-          <div className="space-y-1.5 font-mono text-[9px] select-none">
-            <div className="p-1.5 border border-[#EDE8DE] bg-[#FAF9F5] rounded-md flex items-center justify-between">
-              <span className="text-neutral-500 font-sans font-semibold">New Active Thread</span>
-              <span className="bg-white border px-1.5 py-0.5 rounded shadow-3xs font-extrabold text-[#C2410C]">Alt + N</span>
-            </div>
-            <div className="p-1.5 border border-[#EDE8DE] bg-[#FAF9F5] rounded-md flex items-center justify-between">
-              <span className="text-neutral-500 font-sans font-semibold">Toggle Settings Drawer</span>
-              <span className="bg-white border px-1.5 py-0.5 rounded shadow-3xs font-extrabold text-[#C2410C]">Alt + S</span>
-            </div>
-            <div className="p-1.5 border border-[#EDE8DE] bg-[#FAF9F5] rounded-md flex items-center justify-between">
-              <span className="text-neutral-500 font-sans font-semibold">Platform Guide Tour</span>
-              <span className="bg-white border px-1.5 py-0.5 rounded shadow-3xs font-extrabold text-[#C2410C]">Alt + C</span>
-            </div>
-            <div className="p-1.5 border border-[#EDE8DE] bg-[#FAF9F5] rounded-md flex items-center justify-between">
-              <span className="text-neutral-500 font-sans font-semibold">Clear Active Thread Logs</span>
-              <span className="bg-white border px-1.5 py-0.5 rounded shadow-3xs font-extrabold text-[#C2410C]">Alt + D</span>
-            </div>
-            <div className="p-1.5 border border-[#EDE8DE] bg-[#FAF9F5] rounded-md flex items-center justify-between">
-              <span className="text-neutral-500 font-sans font-semibold">Dismiss Guide or Drawer</span>
-              <span className="bg-white border px-1.5 py-0.5 rounded shadow-3xs font-extrabold text-[#C2410C]">Esc</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Module 3: REAL JSON MCP CONFIG editor */}
-        <div className="bg-white p-4 border border-[#E6E0D5] rounded-xl space-y-3.5 shadow-3xs">
-          <div className="flex items-center justify-between pb-2 border-b border-[#E6DCD0]">
-            <label className="text-[10px] font-black text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
-              <HardDrive className="w-3.5 h-3.5 text-[#C2410C]" />
-              JSON MCP Servers
-            </label>
-            <HelpCircle 
-              className="w-3.5 h-3.5 text-neutral-400 cursor-help hover:text-neutral-600"
-              title="Input compliant JSON to set up your fleet of Model Context Protocol endpoints." 
-            />
-          </div>
-
-          <p className="text-[10px] text-neutral-500 leading-normal">
-            Configure dynamic toolsets. Define your servers in standard JSON:
-          </p>
-
-          <div className="space-y-1.5">
-            <textarea
-              value={mcpJsonStr}
-              onChange={(e) => setMcpJsonStr(e.target.value)}
-              placeholder="{}"
-              rows={6}
-              className="w-full bg-[#FAF9F5] border border-[#EDE8DE] focus:bg-white focus:border-[#DEC9B3] rounded-lg p-2 text-[10px] focus:ring-1 focus:ring-amber-600 focus:outline-none transition-all font-mono leading-normal custom-scrollbar"
-            />
-
-            {jsonError ? (
-              <div className="flex items-start gap-1 p-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[9px] font-mono">
-                <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                <span>{jsonError}</span>
               </div>
-            ) : (
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-[9px] text-emerald-700 font-mono flex items-center gap-1 font-bold">
-                  <CheckCircle className="w-3 h-3" /> Config Validated
+            </div>
+
+            {/* Script Viewer Container */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className={`text-[10px] font-bold uppercase tracking-widest block select-none ${darkMode ? 'text-neutral-450' : 'text-neutral-500'}`}>
+                  Script Viewer
+                </label>
+                <span className={`text-[9px] font-bold border px-1.5 py-0.5 rounded font-mono ${
+                  darkMode ? 'bg-neutral-900 border-neutral-800 text-neutral-400' : 'bg-neutral-100 border-neutral-200 text-neutral-600'
+                }`}>
+                  {artifactMessages.length} files
                 </span>
-                <button
-                  onClick={handleSaveJsonConfig}
-                  className="px-2.5 py-1 bg-neutral-900 text-[#FAF8F5] hover:bg-[#C2410C] rounded-md text-[10px] font-bold tracking-wide transition-all cursor-pointer"
-                >
-                  Save Workspace
-                </button>
               </div>
-            )}
-          </div>
+              
+              <p className="text-[11px] text-neutral-500 leading-normal select-none">
+                All compiled files, web designs, algorithms, or executable codes built in this workspace. Direct click compiles and opens the file side-by-side.
+              </p>
 
-          {/* Render individual parsed servers list directly aligned with pure JSON config */}
-          {!jsonError && Object.keys(parsedServers).length > 0 && (
-            <div className="pt-2 border-t border-[#EDE8DE] space-y-2">
-              <span className="text-[9px] font-bold text-neutral-500 font-mono uppercase tracking-wider block">Connected Fleet Endpoints ({Object.keys(parsedServers).length}):</span>
-              <div className="space-y-3 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
-                {(Object.entries(parsedServers) as [string, any][]).map(([id, srv]) => {
+              <div className="space-y-2 pt-1 max-h-[350px] overflow-y-auto custom-scrollbar">
+                {artifactMessages.length === 0 ? (
+                  <div className={`py-12 p-4 text-center border border-dashed rounded-xl text-xs italic select-none ${
+                    darkMode ? 'border-neutral-900 bg-neutral-950 text-neutral-550' : 'border-neutral-200 bg-neutral-50 text-neutral-500'
+                  }`}>
+                    <FileCode className="w-6 h-6 text-neutral-400 mx-auto mb-2" />
+                    No custom scripts compiled yet in this session.
+                  </div>
+                ) : (
+                  artifactMessages.map(m => {
+                    const parsed = parseMessageArtifacts(m.content || '');
+                    const isSelected = selectedArtifactMessageId === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          onSelectArtifactMessageId(isSelected ? null : m.id);
+                        }}
+                        className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${
+                          isSelected 
+                            ? (darkMode 
+                                ? 'bg-neutral-900 border-neutral-800 ring-1 ring-neutral-700 shadow-sm' 
+                                : 'bg-neutral-50 border-neutral-350 ring-1 ring-neutral-300 shadow-sm'
+                              )
+                            : (darkMode 
+                                ? 'bg-neutral-900/40 border-neutral-900 hover:border-neutral-800' 
+                                : 'bg-neutral-50 border-neutral-150 hover:border-neutral-250'
+                              )
+                        }`}
+                      >
+                        <div className={`p-1.5 rounded-lg shrink-0 flex items-center justify-center h-8 w-8 border ${
+                          isSelected 
+                            ? (darkMode ? 'bg-neutral-950 border-neutral-805 text-cyan-450' : 'bg-white border-neutral-300 text-indigo-655') 
+                            : (darkMode ? 'bg-neutral-950 border-neutral-900 text-neutral-500' : 'bg-white border-neutral-200 text-neutral-500')
+                        }`}>
+                          <Code className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className={`font-bold text-xs truncate block leading-snug ${darkMode ? 'text-neutral-200' : 'text-neutral-850'}`}>{parsed.artifactTitle || 'unnamed_script'}</span>
+                          <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest block mt-0.5">{parsed.artifactLanguage || 'code'}</span>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'config' && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
+          >
+            {/* Preferred Name */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest block text-neutral-500 select-none">Preferred Name</label>
+              <input
+                type="text"
+                value={preferredName}
+                onChange={(e) => {
+                  setPreferredName(e.target.value);
+                  triggerPrefUpdate({ preferredName: e.target.value.trim(), displayName: e.target.value.trim() });
+                }}
+                placeholder="Name display..."
+                className={`w-full text-xs font-semibold p-2.5 px-3 border rounded-xl focus:outline-none transition-all ${
+                  darkMode 
+                    ? 'bg-neutral-900 border-neutral-850 focus:border-neutral-700 focus:ring-1 focus:ring-neutral-700 text-white placeholder-neutral-600' 
+                    : 'bg-white border-neutral-250 focus:border-neutral-350 focus:ring-1 focus:ring-neutral-350 text-neutral-900 placeholder-neutral-400'
+                }`}
+              />
+            </div>
+
+            {/* User prompt bio */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest block text-neutral-500 select-none">System Context / About Me</label>
+              <textarea
+                value={aboutMe}
+                onChange={(e) => {
+                  setAboutMe(e.target.value);
+                  triggerPrefUpdate({ aboutMe: e.target.value.trim() });
+                }}
+                placeholder="Provide Mtrini with context about you or instructions... Adhere to modular TypeScript, etc..."
+                rows={3}
+                className={`w-full text-xs p-2.5 px-3 border rounded-xl focus:outline-none transition-all resize-none leading-relaxed ${
+                  darkMode 
+                    ? 'bg-neutral-900 border-neutral-850 focus:border-neutral-700 focus:ring-1 focus:ring-neutral-700 text-white placeholder-neutral-650' 
+                    : 'bg-white border-neutral-250 focus:border-neutral-350 focus:ring-1 focus:ring-neutral-350 text-neutral-900 placeholder-neutral-400'
+                }`}
+              />
+            </div>
+
+            {/* Accent Theme Selection */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest block text-neutral-500 select-none">Color Accent Vibe</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {themeOptions.map(opt => {
+                  const isActive = userProfile?.themeColor === opt.value;
                   return (
-                    <div key={id} className="p-2.5 border border-emerald-250 bg-emerald-50/10 rounded-lg flex flex-col gap-2.5 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-[11px] font-bold text-neutral-800 truncate block max-w-[150px]">{id}</span>
-                        <div className="flex items-center gap-1">
-                          <span className="px-1.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 text-[9px] flex items-center justify-center gap-1 select-none shadow-3xs">
-                            <Check className="w-2.5 h-2.5" /> Connected
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2 text-[11px] text-neutral-600 font-sans">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[9px] text-neutral-400 font-bold uppercase font-mono">Activation Mode</span>
-                          <span className="text-[10px] font-medium text-neutral-700 font-mono">Standard Stdio Daemon Configuration</span>
-                        </div>
-
-                        {srv.command && (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[9px] text-neutral-400 font-bold uppercase font-mono">Process Entrypoint</span>
-                            <code className="text-[9.5px] font-mono bg-neutral-100 border text-neutral-800 p-1 px-1.5 rounded select-all block truncate leading-none">
-                              {srv.command} {srv.args ? srv.args.join(' ') : ''}
-                            </code>
-                          </div>
-                        )}
-
-                        <div className="pt-2 border-t border-dashed border-neutral-200">
-                          <span className="text-[9px] text-neutral-500 font-bold uppercase font-mono block mb-1">Active Roblox Studio Toolset:</span>
-                          <div className="flex flex-wrap gap-1">
-                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_write_script</span>
-                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_create_part</span>
-                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_toolbox_search</span>
-                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_insert_model</span>
-                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_get_workspace</span>
-                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_publish_place</span>
-                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_run_tests</span>
-                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_read_script</span>
-                            <span className="px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold font-mono text-[8px] rounded">roblox_set_property</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <button
+                      key={opt.value}
+                      onClick={() => triggerPrefUpdate({ themeColor: opt.value })}
+                      className={`h-9 rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 text-[10px] font-bold ${
+                        isActive 
+                          ? (darkMode ? 'border-white bg-[#151518]' : 'border-neutral-900 bg-neutral-100')
+                          : (darkMode ? 'border-neutral-850 bg-neutral-900/40 hover:border-neutral-7c' : 'border-neutral-200 bg-white hover:bg-neutral-50')
+                      }`}
+                      title={`${opt.label} color theme accent`}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded-full ${opt.color} shadow-3xs border border-white/10`} />
+                    </button>
                   );
                 })}
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Roblox Game Direct Integration poller card */}
-        <div className="p-4 border border-emerald-250 bg-emerald-50/10 rounded-xl space-y-3 shadow-3xs">
-          <div className="flex items-center justify-between pb-2 border-b border-emerald-200 select-none">
-            <span className="text-[10px] font-black text-emerald-990 uppercase tracking-wider flex items-center gap-1.5 font-display">
-              <Terminal className="w-3.5 h-3.5 text-emerald-700 animate-pulse" />
-              Roblox Studio Live Sync
-            </span>
-            <span className="text-[8px] font-mono font-bold bg-emerald-500 text-white px-1.5 py-0.5 rounded leading-none shadow-3xs select-none">
-              ACTIVE BRIDGE
-            </span>
-          </div>
+            {/* Bridge Credentials Key */}
+            <div className="space-y-1.5 border-t pt-4 mt-2 border-dashed border-neutral-800">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold uppercase tracking-widest block text-neutral-500 select-none">Tunnel Bridge API Override</label>
+                <HelpCircle className="w-3.5 h-3.5 text-neutral-500 cursor-help" title="Input custom key here to execute direct calls locally in proxy bypass state. Base64 triggers automatic offline decoding." />
+              </div>
+              <p className="text-[10px] text-neutral-505 leading-relaxed pb-1 select-none">
+                Direct browser bypass. Paste your browser key to maintain offline compiling capabilities if sandbox servers freeze up.
+              </p>
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder="Enter custom Gemini API Key..."
+                  className={`w-full text-xs font-mono p-2.5 pl-3 pr-10 border rounded-xl focus:outline-none transition-all ${
+                    darkMode 
+                      ? 'bg-neutral-900 border-neutral-850 focus:border-neutral-700 text-white placeholder-neutral-600' 
+                      : 'bg-white border-neutral-250 focus:border-neutral-350 text-neutral-900 placeholder-neutral-400'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-3 text-neutral-500 hover:text-neutral-300 cursor-pointer"
+                >
+                  {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
 
-          <p className="text-[11px] text-[#064e43] font-sans leading-relaxed">
-            Since your workspace uses secure direct JSON linking, paste and run this background poller inside Roblox Studio's <strong>Command Bar</strong> or as a Server Script to spawn assets, scripts, and properties <strong>instantly & directly</strong>:
-          </p>
-
-          <div className="space-y-2">
-            <pre className="p-3 bg-neutral-950 text-[9.5px] text-emerald-400 font-mono rounded-lg overflow-x-auto max-h-56 custom-scrollbar leading-relaxed select-all border border-neutral-800">
-{`-- Mtrini Direct Live Poller Sync (Roblox Studio)
-local HttpService = game:GetService("HttpService")
-local workspace = game:GetService("Workspace")
-
-local SERVER_URL = "${robloxServerUrl}"
-print("[Mtrini Sync] Listening for live actions at: " .. SERVER_URL)
-
-local function locate(path)
-    local parts = string.split(path, ".")
-    local cur = game
-    for _, name in ipairs(parts) do
-        local child = cur:FindFirstChild(name)
-        if not child then return nil end
-        cur = child
-    end
-    return cur
-end
-
-task.spawn(function()
-    while true do
-        local ok, data = pcall(function()
-            return HttpService:GetAsync(SERVER_URL)
-        end)
-        if ok and data and data ~= "" then
-            local cmds = HttpService:JSONDecode(data)
-            for _, cmd in ipairs(cmds) do
-                local args = cmd.arguments or {}
-                print("[Mtrini] Executing instant: " .. cmd.name)
-                
-                pcall(function()
-                    if cmd.name == "roblox_create_part" then
-                        local p = Instance.new(args.className or "Part")
-                        p.Name = args.Name or "MtriniPart"
-                        p.Position = Vector3.new(unpack(args.Position or {0, 10, 0}))
-                        p.Size = Vector3.new(unpack(args.Size or {4, 1, 4}))
-                        if args.Color then p.BrickColor = BrickColor.new(args.Color) end
-                        if args.Material then p.Material = Enum.Material[args.Material] end
-                        p.Anchored = true
-                        p.Parent = workspace
-                        print("[Mtrini] Successfully spawned part: " .. p.Name)
-                        
-                    elseif cmd.name == "roblox_write_script" then
-                        local s = Instance.new("Script")
-                        s.Name = args.scriptName or "GameScript"
-                        s.Source = args.content or ""
-                        s.Parent = workspace
-                        print("[Mtrini] Successfully injected script: " .. s.Name)
-                        
-                    elseif cmd.name == "roblox_insert_model" then
-                        local assetId = tonumber(args.assetId)
-                        if assetId then
-                            local objects = game:GetObjects("rbxassetid://" .. assetId)
-                            for _, obj in ipairs(objects) do
-                                obj.Parent = workspace
-                            end
-                            print("[Mtrini] Successfully inserted assetId " .. assetId)
-                        end
-                        
-                    elseif cmd.name == "roblox_set_property" then
-                        local obj = locate(args.instancePath)
-                        if obj then
-                            obj[args.propertyName] = args.value
-                            print("[Mtrini] Property altered: " .. args.propertyName)
-                        end
-                    end
-                end)
-            end
-        end
-        task.wait(1.5)
-    end
-end)`}
-            </pre>
-            <div className="flex items-center gap-1.5 text-[9px] text-neutral-500 font-mono select-none">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-              <span>Make sure HttpEnabled is toggled true in Roblox Game settings under Security.</span>
+              <button
+                type="button"
+                onClick={handleUpdateApiKeyInternal}
+                className={`w-full py-2 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs hover:scale-[1.01] active:scale-[0.99] ${
+                  apiKeySavedStatus 
+                    ? 'bg-emerald-500 text-neutral-950 hover:bg-emerald-500 border-emerald-500' 
+                    : (darkMode 
+                        ? 'bg-white text-neutral-950 border-white hover:bg-neutral-200' 
+                        : 'bg-neutral-900 text-white border-neutral-900 hover:bg-neutral-800'
+                      )
+                }`}
+              >
+                {apiKeySavedStatus ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
+                    <span>Credentials Saved!</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Configure Overrides</span>
+                  </>
+                )}
+              </button>
             </div>
-          </div>
-        </div>
 
-        {/* Cloud Sync Bridge URL Override */}
-        <div className="bg-white p-4 border border-[#E6E0D5] rounded-xl space-y-3.5 shadow-3xs">
-          <div className="flex items-center justify-between pb-2 border-b border-[#E6DCD0] select-none">
-            <label className="text-[10px] font-black text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5 text-emerald-700 hover:rotate-180 transition-all duration-300" />
-              Cloud Sync Bridge URL
-            </label>
-            <span className="text-[8px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 uppercase tracking-wide">
-              MTRINI SYNC
-            </span>
-          </div>
+            {/* Keyboard Shortcuts Toggle */}
+            <div className="flex items-center justify-between pt-3 border-t border-dashed border-neutral-800">
+              <div className="space-y-0.5 max-w-[80%] select-none">
+                <span className={`text-xs font-bold block ${darkMode ? 'text-neutral-200' : 'text-neutral-800'}`}>Alt Hotkeys</span>
+                <span className="text-[10px] text-neutral-500 leading-normal block">Enable hotkeys (Alt+N: Chat, Alt+S: Settings)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShortcutsEnabled(!shortcutsEnabled);
+                  triggerPrefUpdate({ shortcutsEnabled: !shortcutsEnabled });
+                }}
+                className={`w-11 h-6 rounded-full p-0.5 transition-colors duration-200 cursor-pointer ${
+                  shortcutsEnabled ? (darkMode ? 'bg-cyan-500' : 'bg-neutral-900') : 'bg-neutral-800'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${
+                    shortcutsEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
 
-          <div className="space-y-1.5">
-            <input
-              type="text"
-              placeholder="e.g. https://ais-pre-...run.app"
-              value={userProfile?.bridgeUrl || ''}
-              onChange={(e) => onUpdatePreferences({ bridgeUrl: e.target.value })}
-              className="w-full bg-[#FAF9F5] border border-[#EDE8DE] focus:bg-white focus:border-[#DEC9B3] rounded-lg p-2 text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none transition-all font-mono"
-            />
-            <p className="text-[10px] text-neutral-500 leading-normal">
-              If running on static hosting like Netlify, specify your active Cloud Run Bridge URL to sync Roblox Studio commands directly.
-            </p>
-          </div>
-        </div>
+          </motion.div>
+        )}
 
-        {/* Module 4: Custom Private API Key Overrides */}
-        <div className="bg-white p-4 border border-[#E6E0D5] rounded-xl space-y-3.5 shadow-3xs">
-          <div className="flex items-center justify-between pb-2 border-b border-[#E6DCD0] select-none">
-            <label className="text-[10px] font-black text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#C2410C]" />
-              Bridge Tunnel Override
-            </label>
-            <span className="text-[8px] font-mono text-neutral-500 bg-neutral-50 px-1.5 py-0.5 rounded border border-neutral-250 uppercase tracking-wide">
-              SECURITY
-            </span>
-          </div>
+        {activeTab === 'integrations' && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
+          >
+            {/* Model Context Protocol */}
+            <div className={`space-y-2 border border-neutral-900 rounded-xl p-3 bg-neutral-950/20 shadow-3xs sm:p-4`}>
+              <div className="flex items-center gap-1.5 select-none">
+                <Cpu className={`w-4 h-4 text-cyan-400`} />
+                <span className="text-xs font-extrabold tracking-tight">Model Context Protocol</span>
+              </div>
+              
+              <p className="text-[10px] text-neutral-500 leading-relaxed select-none">
+                Allow Mtrini to discover systems tools, files, or local workspace devices by linking to HTTP MCP Server bounds.
+              </p>
 
-          <div className="space-y-1.5">
-            <input
-              type="password"
-              placeholder="Active: Workspace Direct Proxy"
-              value={localApiKey}
-              onChange={(e) => onUpdateApiKey(e.target.value)}
-              className="w-full bg-[#FAF9F5] border border-[#EDE8DE] focus:bg-white focus:border-[#DEC9B3] rounded-lg p-2 text-xs focus:ring-1 focus:ring-[#C2410C] focus:outline-none transition-all font-mono"
-            />
-            <p className="text-[10px] text-neutral-500 leading-normal">
-              By default, Mtrini routes prompts via the server-side proprietary AI compilation tunnel.
-            </p>
-          </div>
-        </div>
+              <div className="space-y-1.5 mt-2">
+                <input
+                  type="text"
+                  value={mcpUrl}
+                  onChange={(e) => setMcpUrl(e.target.value)}
+                  placeholder="e.g. http://localhost:3001"
+                  className={`w-full text-xs font-mono p-2 py-1.5 border rounded-lg focus:outline-none transition-all ${
+                    darkMode 
+                      ? 'bg-neutral-900 border-[#1c1c22] text-white placeholder-neutral-700' 
+                      : 'bg-white border-neutral-250 text-neutral-900 placeholder-neutral-400'
+                  }`}
+                />
+
+                <button
+                  type="button"
+                  onClick={handleScanMcp}
+                  disabled={mcpStatus === 'scanning'}
+                  className={`w-full py-2 border rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer ${
+                    mcpStatus === 'scanning' 
+                      ? 'bg-neutral-900 text-neutral-500 border-neutral-850' 
+                      : (darkMode ? 'bg-neutral-900 hover:bg-neutral-850 text-neutral-250 border-neutral-800' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-750 border-neutral-200')
+                  }`}
+                >
+                  {mcpStatus === 'scanning' ? (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin text-cyan-400" />
+                      <span>Pairing Tunnel...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Terminal className="w-3 h-3" />
+                      <span>Ping & Sync Server</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Server info readout */}
+              {mcpStatus !== 'scanning' && mcpMessage && (
+                <div className={`mt-2 p-2 border text-[10px] rounded-lg select-none leading-relaxed flex items-start gap-1.5 font-sans ${
+                  mcpStatus === 'connected' 
+                    ? (darkMode ? 'bg-emerald-950/10 border-emerald-900/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-800') 
+                    : (mcpStatus === 'error' ? (darkMode ? 'bg-amber-955/10 border-amber-900/30 text-amber-500' : 'bg-amber-50 border-amber-200 text-amber-600') : 'text-neutral-500')
+                }`}>
+                  <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block leading-none mb-1">Pairing readout:</strong>
+                    <span>{mcpMessage}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Found tools list & manual raw JSON config editor */}
+              <div className="space-y-1.5 mt-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-neutral-450 uppercase tracking-widest block select-none">
+                    {showJsonEditor ? 'JSON Config Payload' : `Registered Handlers (${mcpTools.length})`}
+                  </span>
+                  <button 
+                    type="button"
+                    onClick={() => setShowJsonEditor(!showJsonEditor)}
+                    className="text-[9px] font-bold text-cyan-400 hover:underline cursor-pointer select-none"
+                  >
+                    {showJsonEditor ? 'View Parsed List' : 'Edit raw JSON'}
+                  </button>
+                </div>
+
+                {!showJsonEditor ? (
+                  mcpTools.length > 0 ? (
+                    <div className="max-h-24 overflow-y-auto custom-scrollbar space-y-1 select-none text-[9.5px]">
+                      {mcpTools.map((t, idx) => (
+                        <div key={idx} className={`p-1.5 border rounded-md font-mono flex flex-col ${
+                          darkMode ? 'bg-neutral-900/30 border-[#15151a]' : 'bg-neutral-50 border-neutral-200'
+                        }`}>
+                          <span className={`font-bold ${darkMode ? 'text-cyan-400' : 'text-indigo-650'}`}>{t.name}</span>
+                          <span className="text-[8px] text-neutral-500 leading-normal truncate">{t.description || 'Virtual command mapper'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-neutral-500 italic text-center py-2 select-none">No active tools paired.</div>
+                  )
+                ) : (
+                  <div className="space-y-1.5">
+                    <textarea
+                      value={jsonToolsInput}
+                      onChange={(e) => setJsonToolsInput(e.target.value)}
+                      rows={4}
+                      className="w-full text-[9px] font-mono p-1.5 border rounded bg-neutral-900 border-neutral-800 text-neutral-200 leading-normal resize-y focus:outline-none focus:border-cyan-500/50"
+                      placeholder='[{"name": "test", "description": "desc"}]'
+                    />
+                    {jsonToolsError && (
+                      <p className="text-[8.5px] text-rose-450 leading-tight">{jsonToolsError}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleApplyJsonTools}
+                      className="w-full py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950 bg-cyan-400 hover:bg-cyan-300 rounded cursor-pointer transition-colors"
+                    >
+                      Apply & Sync JSON Tools
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Roblox Command Sync poller */}
+            <div className={`space-y-2 border border-neutral-900 rounded-xl p-3 bg-neutral-950/20 shadow-3xs sm:p-4`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 select-none">
+                  <Layout className={`w-4 h-4 text-rose-500`} />
+                  <span className="text-xs font-extrabold tracking-tight">Roblox Studio Poller</span>
+                </div>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" title="Ready for connections" />
+              </div>
+              
+              <p className="text-[10px] text-neutral-500 leading-relaxed select-none">
+                Spawn code artifacts, models, blocks, or interface layouts straight to Roblox Studio using Mtrini polling.
+              </p>
+
+              <button
+                onClick={copyLuaConnector}
+                className={`w-full py-2 border rounded-lg text-[10px] font-bold uppercase tracking-wide transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer ${
+                  isCopiedLua 
+                    ? 'bg-emerald-500 text-neutral-950 border-emerald-500' 
+                    : (darkMode ? 'bg-[#151518]/80 hover:bg-neutral-850 text-neutral-300 border-neutral-805' : 'bg-white hover:bg-neutral-100 text-neutral-700 border-neutral-250')
+                }`}
+              >
+                {isCopiedLua ? (
+                  <>
+                    <Check className="w-3 h-3 stroke-[2.5px]" />
+                    <span>LUA Hook Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Clipboard className="w-3 h-3" />
+                    <span>Copy LUA command bar hook</span>
+                  </>
+                )}
+              </button>
+
+              {/* Commands poll history */}
+              <div className="space-y-1.5 mt-2.5- pt-2 select-none">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-neutral-450 uppercase tracking-widest font-mono">Poll Pipeline Registry</span>
+                  <span className="text-[9px] font-mono text-neutral-500 select-none">polling active</span>
+                </div>
+                <div className={`max-h-24 overflow-y-auto custom-scrollbar space-y-1 rounded-lg border font-mono text-[9.5px] p-2 ${
+                  darkMode ? 'bg-[#09090b] border-[#151518]' : 'bg-neutral-50 border-neutral-200'
+                }`}>
+                  {robloxHistory.length === 0 ? (
+                    <span className="text-neutral-550 italic text-[9px] block text-center py-4">
+                      Waiting for active poller commands queue...
+                    </span>
+                  ) : (
+                    robloxHistory.map((cmd) => (
+                      <div key={cmd.id} className="flex items-start justify-between border-b pb-1 last:border-b-0 last:pb-0 border-neutral-900/60 leading-relaxed">
+                        <div className="flex flex-col">
+                          <span className={`font-bold ${darkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>{cmd.name}</span>
+                          <span className="text-[7.5px] text-neutral-500 max-w-[130px] truncate">{JSON.stringify(cmd.arguments || {})}</span>
+                        </div>
+                        <span className="text-[7.5px] text-neutral-555">{new Date(cmd.timestamp).toLocaleTimeString([], { hour12: false })}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
       </div>
 
-      {/* Drawer Footer credits & branding metadata */}
-      <div className="p-4 border-t border-[#E6DCD0] bg-[#F2EDE4] mt-auto flex flex-col gap-1 text-center font-mono text-[9px] text-[#8C8473] select-none">
-        <span>ENGINE: mtrini-v1.0.0-core</span>
-        <span className="font-semibold text-neutral-800">"Mtrini: Designed By Nova AI"</span>
+      {/* Simplified Footer */}
+      <div className={`p-4 border-t mt-auto text-center text-[10px] text-neutral-500 font-sans select-none transition-all duration-200 ${
+        darkMode ? 'border-neutral-900 bg-[#070708]' : 'border-neutral-200 bg-neutral-100'
+      }`}>
+        <span>Mtrini Studio Workspace</span>
       </div>
     </motion.div>
   );

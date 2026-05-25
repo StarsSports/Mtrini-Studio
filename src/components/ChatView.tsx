@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Send, Terminal, Square, Award, Cpu, Loader2, Image, Layers, ChevronDown, ChevronRight, Brain, Info, Check, Coins, Lock, Gem, Download, Trash2, Plus, Sparkles, Code, Globe
+  Send, Terminal, Square, ChevronDown, ChevronRight, Brain, Plus, Trash2, Download, Image, Sparkles, Layers, FileCode
 } from 'lucide-react';
 import { Message, ThemeColors, UserProfile } from '../types';
-import ArtifactView from './ArtifactView';
-import { parseMessageArtifacts, parseRobloxToolCall, stripRobloxToolTag } from '../utils';
+import { parseMessageArtifacts } from '../utils';
 import StreamingThinkingIndicator from './StreamingThinkingIndicator';
 
 interface ChatViewProps {
@@ -23,6 +22,13 @@ interface ChatViewProps {
   selectedThinking: 'fast' | 'deep' | 'short';
   onSelectThinking: (style: 'fast' | 'deep' | 'short') => void;
   onClearMessages?: () => void;
+  chatMode: 'mtrini' | 'mtrini-code';
+  onSelectChatMode: (mode: 'mtrini' | 'mtrini-code') => void;
+  selectedArtifactMessageId: string | null;
+  onSelectArtifactMessageId: (msgId: string | null) => void;
+  isArtifactExpanded: boolean;
+  hasActiveArtifact: boolean;
+  darkMode?: boolean;
 }
 
 interface ParsedThought {
@@ -43,97 +49,67 @@ function parseMessageThoughts(content: string): ParsedThought {
   return { thought, response };
 }
 
-const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleThought, expandedThoughts, setSelectedArtifactMessageId, selectedArtifactMessageId, isLatest, streaming, isNew }: any) => {
+const MessageItem = React.memo(({ 
+  m, 
+  isUser, 
+  userProfile, 
+  themeColors, 
+  toggleThought, 
+  expandedThoughts, 
+  setSelectedArtifactMessageId, 
+  selectedArtifactMessageId,
+  darkMode = true 
+}: any) => {
   const { thought, response } = parseMessageThoughts(m.content || '');
   const parsed = parseMessageArtifacts(response);
-  const robloxTool = parseRobloxToolCall(response);
-  const cleanProse = stripRobloxToolTag(parsed.prose);
 
   const hasThought = thought.trim().length > 0;
   const isThoughtExpanded = expandedThoughts[m.id] !== false;
 
-  const [execStatus, setExecStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
-  const [execOutput, setExecOutput] = useState<string>('');
-
-  const getApiUrl = (endpoint: string) => {
-    if (userProfile?.bridgeUrl) {
-      return `${userProfile.bridgeUrl.replace(/\/$/, '')}${endpoint}`;
-    }
-    if (typeof window !== 'undefined' && window.location.hostname.includes('netlify.app')) {
-      return `https://ais-pre-2lec2iqt6rhwokfedcy24v-429842933088.europe-west2.run.app${endpoint}`;
-    }
-    return endpoint;
-  };
-
-  const handleExecuteRobloxTool = async () => {
-    if (!robloxTool) return;
-    setExecStatus('running');
-    setExecOutput('');
-    try {
-      const res = await fetch(getApiUrl('/api/mcp/call'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: userProfile?.mcpServer || 'Roblox_Studio_JSON_STDIO',
-          toolName: robloxTool.name,
-          arguments: robloxTool.arguments
-        })
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Server returned error status ${res.status}: ${text || 'Unknown endpoint error'}`);
-      }
-
-      let result: any;
-      try {
-        result = await res.json();
-      } catch (jsonErr) {
-        throw new Error('Server returned custom response, but failed to parse as JSON.');
-      }
-
-      if (result.error && !result.success) {
-        throw new Error(result.error || result.message || 'Tool execution was rejected or timeout by companion.');
-      }
-      
-      setExecStatus('success');
-      // Format response cleanly
-      const textOutput = result.content?.[0]?.text || result.output || `Successfully executed ${robloxTool.name}!`;
-      setExecOutput(textOutput);
-    } catch (err: any) {
-      setExecStatus('error');
-      setExecOutput(err.message || 'Direct connection gateway link failed. Make sure your local Mtrini Desktop companion is running.');
-    }
-  };
-
-  useEffect(() => {
-    // Only auto-trigger actions if the message is the latest generated message, is from the active session, streaming completed, there is a pending roblox tool tag, and state is idle.
-    if (isNew && isLatest && !streaming && robloxTool && execStatus === 'idle') {
-      handleExecuteRobloxTool();
-    }
-  }, [isLatest, streaming, robloxTool, execStatus, isNew]);
+  // Estimate number of lines for script preview
+  const lineCount = parsed.artifactCode ? parsed.artifactCode.split('\n').length : 0;
 
   return (
-    <div key={m.id} className="flex flex-col w-full space-y-1">
-      <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 font-mono px-1 select-none">
-        <span className="font-bold text-neutral-700">
-          {isUser ? (userProfile?.displayName || 'User Node') : 'Mtrini AI Agent'}
+    <motion.div 
+      key={m.id} 
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
+      className="flex flex-col w-full space-y-1"
+    >
+      {/* Sender and time row */}
+      <div className={`flex items-center gap-1.5 text-[10px] font-mono px-1 select-none ${darkMode ? 'text-neutral-500' : 'text-neutral-450'}`}>
+        <span className={`font-bold ${darkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+          {isUser ? (userProfile?.preferredName || userProfile?.displayName || 'User Node') : 'Mtrini'}
         </span>
         <span>•</span>
-        <span>{new Date(m.createdAt?.seconds * 1000 || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+        <span>{new Date(m.createdAt?.seconds * 1050 || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
 
+      {/* Bubble Shell */}
       <div 
-        className={`max-w-[95%] p-4 rounded-2xl text-[13px] leading-relaxed font-sans border transition-all ${isUser ? 'bg-white border-neutral-200 text-neutral-900 rounded-tr-none shadow-3xs self-end' : 'bg-transparent border-transparent text-neutral-800'}`}
+        className={`max-w-[95%] p-4 rounded-2xl text-[13px] leading-relaxed font-sans border transition-all ${
+          isUser 
+            ? (darkMode 
+                ? 'bg-neutral-900 border-neutral-800 text-neutral-100 rounded-tr-none shadow-sm self-end' 
+                : 'bg-neutral-200 border-neutral-300 text-neutral-900 rounded-tr-none shadow-sm self-end'
+              ) 
+            : 'bg-transparent border-transparent text-neutral-800'
+        }`}
       >
+        {/* Thinking block if AI response */}
         {!isUser && hasThought && (
-          <div className="mb-3.5 bg-neutral-100 border border-neutral-200 rounded-xl overflow-hidden shadow-3xs max-w-2xl">
+          <div className={`mb-3.5 border rounded-xl overflow-hidden shadow-sm max-w-2xl transition-all duration-200 ${
+            darkMode ? 'bg-[#0f0f12] border-neutral-800' : 'bg-neutral-100 border-neutral-250'
+          }`}>
             <button
               type="button"
               onClick={() => toggleThought(m.id)}
-              className="w-full flex items-center justify-between p-2.5 px-3 bg-neutral-200/60 text-neutral-800 hover:text-black transition-colors text-xs font-bold font-display uppercase tracking-wide cursor-pointer"
+              className={`w-full flex items-center justify-between p-2.5 px-3 transition-colors text-xs font-bold uppercase tracking-wide cursor-pointer ${
+                darkMode ? 'bg-neutral-950/80 text-neutral-300 hover:text-white' : 'bg-neutral-200/50 text-neutral-750 hover:text-neutral-900'
+              }`}
             >
-              <span className="flex items-center gap-1.5 text-neutral-800">
+              <span className="flex items-center gap-1.5 font-bold">
                 <Brain className={`w-3.5 h-3.5 ${themeColors.text}`} />
                 <span>Thinking Process</span>
               </span>
@@ -141,120 +117,70 @@ const MessageItem = React.memo(({ m, isUser, userProfile, themeColors, toggleTho
             </button>
             
             {isThoughtExpanded && (
-              <pre className="p-3 bg-white/40 border-t border-neutral-200 text-[10px] text-neutral-500 font-mono whitespace-pre-wrap overflow-x-auto leading-relaxed max-h-48 custom-scrollbar">
+              <pre className={`p-3 border-t text-[10px] font-mono whitespace-pre-wrap overflow-x-auto leading-relaxed max-h-48 custom-scrollbar ${
+                darkMode ? 'bg-neutral-950/65 border-neutral-800 text-neutral-400' : 'bg-white border-neutral-200 text-neutral-600'
+              }`}>
                 {thought}
               </pre>
             )}
           </div>
         )}
 
-        <div className="whitespace-pre-wrap select-text pr-1 prose leading-relaxed font-sans text-neutral-800">
-          {cleanProse}
+        {/* Prose text rendering */}
+        <div className={`whitespace-pre-wrap select-text pr-1 prose leading-relaxed font-sans ${
+          darkMode ? 'text-neutral-200' : 'text-neutral-800'
+        }`}>
+          {parsed.prose}
         </div>
 
-        {/* Beautiful Roblox Live Action Control Panel */}
-        {!isUser && robloxTool && (
-          <div className="mt-4 p-4 bg-emerald-50/70 border border-emerald-200/85 rounded-2xl shadow-3xs max-w-2xl">
-            <div className="flex items-center justify-between gap-3 mb-2.5">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <span className="text-xs font-bold font-mono tracking-tight text-emerald-950">
-                  ⚡ Roblox Studio Action: <code className="bg-emerald-100/80 px-1.5 py-0.5 rounded border border-emerald-250 text-[11px]">{robloxTool.name}</code>
-                </span>
-              </div>
-              
-              {execStatus === 'idle' && (
-                <span className="text-[9px] font-mono uppercase bg-emerald-150 border border-emerald-250 px-2 py-0.5 rounded font-bold text-emerald-800 select-none">
-                  READY
-                </span>
-              )}
-              {execStatus === 'running' && (
-                <span className="text-[9px] font-mono uppercase bg-neutral-100 border text-neutral-600 px-2 py-0.5 rounded font-bold flex items-center gap-1 select-none">
-                  <Loader2 className="w-2.5 h-2.5 animate-spin" /> RUNNING
-                </span>
-              )}
-              {execStatus === 'success' && (
-                <span className="text-[9px] font-mono uppercase bg-emerald-500 text-white px-2 py-0.5 rounded font-bold select-none shadow-3xs">
-                  SUCCESS
-                </span>
-              )}
-              {execStatus === 'error' && (
-                <span className="text-[9px] font-mono uppercase bg-rose-600 text-white px-2 py-0.5 rounded font-bold select-none shadow-3xs">
-                  FAILED
-                </span>
-              )}
-            </div>
-
-            <p className="text-[11px] text-neutral-600 mb-3 font-sans">
-              Mtrini compiled a direct executable payload. Tap below to send this instruction directly into Roblox Studio without pasting scripts manually.
-            </p>
-
-            <div className="mb-3.5 bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden shadow-inner">
-              <div className="px-3 py-1 bg-neutral-100/5 text-[9px] text-neutral-400 font-mono uppercase select-none tracking-widest border-b border-neutral-900">
-                Action Arguments (JSON)
-              </div>
-              <pre className="p-3 text-[10.5px] text-emerald-400 font-mono whitespace-pre-wrap overflow-x-auto leading-normal max-h-36 custom-scrollbar select-all bg-neutral-950/80">
-                {JSON.stringify(robloxTool.arguments, null, 2)}
-              </pre>
-            </div>
-
-            {execStatus === 'idle' && (
-              <button
-                type="button"
-                onClick={handleExecuteRobloxTool}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-xs hover:shadow transition-all cursor-pointer"
-              >
-                Assemble & Spawn directly in Game
-              </button>
-            )}
-
-            {execStatus === 'running' && (
-              <button
-                type="button"
-                disabled
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-neutral-100 text-neutral-400 font-bold text-xs rounded-xl border select-none"
-              >
-                <Loader2 className="w-3 h-3 animate-spin text-neutral-500" /> Connecting to Local Roblox Daemon...
-              </button>
-            )}
-
-            {(execStatus === 'success' || execStatus === 'error') && (
-              <div className="space-y-3">
-                <div className={`p-3 border rounded-xl text-[11px] font-mono ${execStatus === 'success' ? 'bg-emerald-50 text-emerald-850 border-emerald-150' : 'bg-rose-50 text-rose-850 border-rose-150'} leading-relaxed overflow-x-auto max-h-36 custom-scrollbar select-text`}>
-                  <strong className="block mb-1 uppercase tracking-wider text-[9px] select-none font-sans font-bold">
-                    {execStatus === 'success' ? '✔ Live Output Logs:' : '⚠ Client Error Report:'}
-                  </strong>
-                  {execOutput}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleExecuteRobloxTool}
-                  className="w-full py-1.5 px-3 bg-white border border-neutral-200 hover:bg-neutral-50 text-neutral-700 font-bold text-[10.5px] rounded-lg shadow-3xs transition-colors cursor-pointer"
-                >
-                  Re-Execute Direct Payload
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
+        {/* Clicking opens the overlay Script Viewer! */}
         {parsed.hasArtifact && (
           <div 
             onClick={() => setSelectedArtifactMessageId(m.id)}
-            className={`mt-4 p-3 bg-white border rounded-xl flex items-center justify-between gap-3 text-xs font-bold hover:border-current ${themeColors.hoverBorder} transition-all cursor-pointer shadow-3xs ${selectedArtifactMessageId === m.id ? `border-current ${themeColors.text}` : 'border-neutral-200 text-neutral-700'}`}
+            className={`mt-4 p-4 border rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-200 cursor-pointer shadow-3xs hover:scale-[1.01] active:scale-[0.99] ${
+              selectedArtifactMessageId === m.id 
+                ? (darkMode ? 'bg-neutral-900 border-cyan-500 shadow-cyan-950/10' : 'bg-neutral-50 border-indigo-500 shadow-indigo-100')
+                : (darkMode ? 'bg-[#111114] border-neutral-800 hover:border-neutral-750' : 'bg-white border-neutral-250 hover:bg-neutral-50 hover:border-neutral-350')
+            }`}
           >
-            <span className="flex items-center gap-2">
-              <Layers className={`w-4 h-4 ${themeColors.text} animate-pulse`} />
-              <span>Script Bloc: <code className="font-mono bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-600 font-semibold">{parsed.artifactTitle}</code></span>
-            </span>
-            <span className="text-[10px] uppercase font-bold bg-neutral-100 px-2.5 py-1 rounded-lg border border-neutral-200">
-              Open Side-by-Side Editor
-            </span>
+            <div className="flex items-start gap-3">
+              <div className={`p-3 rounded-lg shrink-0 flex items-center justify-center border transition-all ${
+                darkMode ? 'bg-neutral-950 border-neutral-800 text-cyan-400' : 'bg-neutral-105 border-neutral-250 text-indigo-600'
+              }`}>
+                <FileCode className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-xs font-extrabold font-mono tracking-tight ${darkMode ? 'text-white' : 'text-neutral-900'}`}>
+                    {parsed.artifactTitle}
+                  </span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono uppercase tracking-wider ${
+                    darkMode ? 'bg-neutral-900 text-neutral-400' : 'bg-neutral-200 text-neutral-600'
+                  }`}>
+                    {parsed.artifactLanguage}
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-500 leading-snug">
+                  Drafted with {lineCount} lines of executable instructions. Click to open Script Viewer.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className={`text-[10px] uppercase font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all w-full md:w-auto justify-center ${
+                darkMode 
+                  ? 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:text-white hover:border-neutral-700' 
+                  : 'bg-neutral-100 text-neutral-750 border-neutral-250 hover:bg-neutral-200 hover:text-neutral-900 shadow-3xs'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Launch Script View</span>
+            </button>
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 });
 
@@ -272,13 +198,18 @@ export default function ChatView({
   onSelectModel,
   selectedThinking,
   onSelectThinking,
-  onClearMessages
+  onClearMessages,
+  chatMode,
+  onSelectChatMode,
+  selectedArtifactMessageId,
+  onSelectArtifactMessageId,
+  isArtifactExpanded,
+  hasActiveArtifact,
+  darkMode = true
 }: ChatViewProps) {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
-  const [selectedArtifactMessageId, setSelectedArtifactMessageId] = useState<string | null>(null);
-  const [isArtifactExpanded, setIsArtifactExpanded] = useState(false);
 
   // Set of historic message IDs to filter automatic execution on initial loading
   const historicMessageIds = useRef<Set<string>>(new Set());
@@ -306,8 +237,7 @@ export default function ChatView({
   }, [messages, streaming]);
 
   useEffect(() => {
-    setSelectedArtifactMessageId(null);
-    setIsArtifactExpanded(false);
+    onSelectArtifactMessageId(null);
   }, [activeChatId]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -319,10 +249,6 @@ export default function ChatView({
 
   const toggleThought = (msgId: string) => {
     setExpandedThoughts(prev => ({ ...prev, [msgId]: !prev[msgId] }));
-  };
-
-  const handleApplyPreset = (text: string) => {
-    setInputValue(text);
   };
 
   const handleExportMarkdown = () => {
@@ -338,104 +264,128 @@ export default function ChatView({
     document.body.removeChild(link);
   };
 
-  const activeMessage = messages.find(m => m.id === selectedArtifactMessageId);
-  const activeArtifact = activeMessage ? parseMessageArtifacts(activeMessage.content) : null;
-
+  // We no longer compress the chat view to 50% since we open the beautiful code inside the floating modal overlay!
   return (
-    <div className={`flex-1 flex flex-col h-full overflow-hidden ${activeArtifact ? (isArtifactExpanded ? 'max-w-0 opacity-0 pointer-events-none' : 'max-w-[55%] md:max-w-[50%]') : 'w-full'} transition-all duration-300`}>
+    <div className={`flex-1 flex flex-col h-full overflow-hidden w-full transition-all duration-300`}>
+      
       {/* Header Panel */}
-      <div className="h-14 border-b border-neutral-200 px-4 bg-neutral-50 flex items-center justify-between shrink-0 select-none shadow-3xs z-10">
-        <div className="flex items-center gap-2">
-            <Cpu className={`w-4.5 h-4.5 ${themeColors.text}`} />
-            <div className="flex flex-col">
-              <span className="text-xs font-display font-extrabold tracking-tight uppercase text-neutral-950">Mtrini Code Studio</span>
-              <span className="text-[10px] text-neutral-500 font-medium font-sans">Workspace Active</span>
-            </div>
+      <div className={`h-14 border-b px-4 flex items-center justify-between shrink-0 select-none shadow-3xs z-10 transition-colors duration-200 ${
+        darkMode ? 'border-neutral-900 bg-[#0d0d0f]' : 'border-neutral-200 bg-neutral-100/70'
+      }`}>
+        <div className={`flex items-center gap-1.5 p-0.5 border rounded-xl select-none transition-all ${
+          darkMode ? 'bg-neutral-950 border-neutral-850' : 'bg-neutral-200/50 border-neutral-250'
+        }`}>
+          <button
+            type="button"
+            onClick={() => onSelectChatMode('mtrini')}
+            className={`px-3.5 py-1 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer ${
+              chatMode === 'mtrini' 
+                ? (darkMode ? 'bg-neutral-800 text-white shadow-sm' : 'bg-white text-neutral-900 shadow-sm') 
+                : 'text-neutral-500 hover:text-neutral-100'
+            }`}
+          >
+            Mtrini
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectChatMode('mtrini-code')}
+            className={`px-3.5 py-1 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer flex items-center gap-1 ${
+              chatMode === 'mtrini-code' 
+                ? (darkMode ? 'bg-neutral-800 text-white shadow-sm' : 'bg-white text-neutral-900 shadow-sm') 
+                : 'text-neutral-500 hover:text-neutral-100'
+            }`}
+          >
+            <span>Mtrini Code</span>
+          </button>
         </div>
+        
         <div className="flex items-center gap-2">
-          {messages.length > 0 && <button onClick={onNewChat} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-[11px] font-bold rounded-xl transition-all shadow-3xs duration-150 cursor-pointer"><Plus className="w-3.5 h-3.5" />New Chat</button>}
-          {messages.length > 0 && onClearMessages && <button onClick={onClearMessages} className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold rounded-xl transition-all shadow-3xs duration-150 cursor-pointer"><Trash2 className="w-3.5 h-3.5" />Reset</button>}
-          {messages.length > 0 && <button onClick={handleExportMarkdown} className={`flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-[11px] font-bold rounded-xl transition-all shadow-3xs duration-150 cursor-pointer`}><Download className="w-3.5 h-3.5" />Export</button>}
-          <button onClick={onOpenPreferences} className={`text-[11px] font-bold border border-neutral-200 bg-white hover:bg-neutral-100 text-neutral-700 px-3 py-1.5 rounded-xl transition-all shadow-3xs duration-150 cursor-pointer`}>Control Desk</button>
+          {messages.length > 0 && (
+            <button 
+              onClick={onNewChat} 
+              className={`flex items-center gap-1.5 px-3 py-1.5 border text-[11px] font-bold rounded-xl transition-all shadow-3xs duration-150 cursor-pointer ${
+                darkMode 
+                  ? 'bg-neutral-900 border-neutral-800 hover:bg-neutral-850 text-neutral-300' 
+                  : 'bg-white border-neutral-250 hover:bg-neutral-100 text-neutral-750'
+              }`}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New Chat
+            </button>
+          )}
+          {messages.length > 0 && onClearMessages && (
+            <button 
+              onClick={onClearMessages} 
+              className={`flex items-center gap-1.5 px-3 py-1.5 border text-rose-500 text-[11px] font-bold rounded-xl transition-all shadow-3xs duration-150 cursor-pointer ${
+                darkMode 
+                  ? 'bg-neutral-900/40 border-rose-950 hover:bg-rose-950/20 text-rose-400' 
+                  : 'bg-white border-red-200 hover:bg-red-50 text-rose-600'
+              }`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Reset
+            </button>
+          )}
+          {messages.length > 0 && (
+            <button 
+              onClick={handleExportMarkdown} 
+              className={`flex items-center gap-1.5 px-3 py-1.5 border text-[11px] font-bold rounded-xl transition-all shadow-3xs duration-150 cursor-pointer ${
+                darkMode 
+                  ? 'bg-neutral-900 border-neutral-800 hover:bg-neutral-850 text-neutral-300' 
+                  : 'bg-white border-neutral-250 hover:bg-neutral-100 text-neutral-750'
+              }`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export
+            </button>
+          )}
+          <button 
+            onClick={onOpenPreferences} 
+            className={`text-[11px] font-bold border px-3 py-1.5 rounded-xl transition-all shadow-3xs duration-150 cursor-pointer ${
+              darkMode 
+                ? 'bg-neutral-900 border-neutral-800 text-neutral-350 hover:bg-neutral-850 hover:text-white' 
+                : 'bg-white border-neutral-250 text-neutral-700 hover:bg-neutral-100'
+            }`}
+          >
+            Tools
+          </button>
         </div>
       </div>
 
       {/* Main Flow Canvas */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar bg-neutral-50">
+      <div className={`flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar transition-colors duration-200 ${
+        darkMode ? 'bg-neutral-950' : 'bg-[#fafaf8]'
+      }`}>
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center p-6 text-center select-none space-y-5 max-w-2xl mx-auto py-10">
+          <div className="h-full flex flex-col items-center justify-center p-6 text-center select-none space-y-5 max-w-xl mx-auto py-16">
             <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.3 }}
-              className="space-y-2"
+              initial={{ scale: 0.94, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: 'easeOut' }}
+              className="space-y-4"
             >
               <div className="flex justify-center">
-                <div className="p-3.5 rounded-2xl bg-white border border-[#DEC9B3] shadow-xs relative">
-                  <Brain className={`w-8 h-8 ${themeColors.text}`} />
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                </div>
+                <motion.div 
+                  initial={{ rotate: -15, scale: 0.8 }}
+                  animate={{ rotate: 0, scale: 1 }}
+                  transition={{ type: 'spring', delay: 0.1, stiffness: 200, damping: 15 }}
+                  className={`p-4 border rounded-2xl shadow-xl relative ${
+                    darkMode ? 'bg-neutral-900 border-neutral-850' : 'bg-white border-neutral-250 shadow-sm'
+                  }`}
+                >
+                  <Sparkles className={`w-8 h-8 ${themeColors.text} animate-pulse`} />
+                </motion.div>
               </div>
-              <h2 className="text-xl font-sans font-extrabold tracking-tight text-neutral-900 uppercase">Welcome to Mtrini Code Studio</h2>
-              <p className="text-xs text-neutral-500 max-w-md mx-auto leading-relaxed">
-                Senior developer AI engine powered by advanced intelligence. Select a preset template below or prompt custom workspace commands to draft interactive views and modules.
+              <h2 className={`text-2xl font-sans font-extrabold tracking-tight leading-tight ${
+                darkMode ? 'text-white' : 'text-neutral-900'
+              }`}>
+                Welcome, {userProfile?.preferredName || userProfile?.displayName || 'User'}
+              </h2>
+              <p className="text-xs text-neutral-450 max-w-sm mx-auto leading-relaxed">
+                {chatMode === 'mtrini-code' 
+                  ? "Mtrini Code Mode is currently active. Ask me about system designs, complex file code, algorithms, or web layouts. I am fully optimized to build, compile, and refine."
+                  : "Mtrini Mode is currently active. Ask questions, brainstorm concepts, translate ideas, or have everyday creative discussions."}
               </p>
-            </motion.div>
-
-            {/* Micro Templates Desk Grid */}
-            <motion.div 
-              initial={{ y: 15, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.15, duration: 0.3 }}
-              className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full pt-2"
-            >
-              <button
-                type="button"
-                onClick={() => handleApplyPreset("Generate a fully interactive Starfield canvas simulator in HTML and CSS with particle physics, multiple stars speed tiers, and adjustable warp controls.")}
-                className="p-3.5 border border-neutral-200 rounded-xl bg-white text-left hover:border-neutral-300 transition-all cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs hover:shadow-xs"
-              >
-                <span className="font-extrabold text-xs text-neutral-950 flex items-center gap-1.5 uppercase">
-                  <Code className={`w-3.5 h-3.5 ${themeColors.text}`} />
-                  1. Canvas Starfield Warp Simulator
-                </span>
-                <span className="text-[10px] text-neutral-500 leading-normal">Interactive custom particle astrophysics canvas animation inside a clean card context.</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleApplyPreset("Write a robust event-driven Roblox Luau core server framework. Implement secure memory garbage collection streams and custom Dispatcher events.")}
-                className="p-3.5 border border-neutral-200 rounded-xl bg-white text-left hover:border-neutral-300 transition-all cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs hover:shadow-xs"
-              >
-                <span className="font-extrabold text-xs text-neutral-950 flex items-center gap-1.5 uppercase">
-                  <Terminal className={`w-3.5 h-3.5 ${themeColors.text}`} />
-                  2. Roblox Luau Dispatcher Framework
-                </span>
-                <span className="text-[10px] text-neutral-500 leading-normal">High-performance custom event scheduler and script pipeline optimized for server environments.</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleApplyPreset("Build an elegant, fully responsive Stock Market Trading Simulator widget with interactive charts, buy/sell log modules, and dynamic filter tags.")}
-                className="p-3.5 border border-neutral-200 rounded-xl bg-white text-left hover:border-neutral-300 transition-all cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs hover:shadow-xs"
-              >
-                <span className="font-extrabold text-xs text-neutral-950 flex items-center gap-1.5 uppercase">
-                  <Sparkles className={`w-3.5 h-3.5 ${themeColors.text}`} />
-                  3. Stock Trading Dashboard
-                </span>
-                <span className="text-[10px] text-neutral-500 leading-normal">Functional UI showing responsive sparkline indicators, mock orders ledger, and analytics.</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleApplyPreset("Create an elegant Algorithmic Sorting Visualizer using HTML Canvas for sorting algorithms (Bubble, Quick, Merge). Include speed slider and array size triggers.")}
-                className="p-3.5 border border-neutral-200 rounded-xl bg-white text-left hover:border-neutral-300 transition-all cursor-pointer text-neutral-700 hover:text-neutral-900 flex flex-col gap-1 shadow-3xs hover:shadow-xs"
-              >
-                <span className="font-extrabold text-xs text-neutral-950 flex items-center gap-1.5 uppercase">
-                  <Globe className={`w-3.5 h-3.5 ${themeColors.text}`} />
-                  4. Algorithmic sorting-visualizer
-                </span>
-                <span className="text-[10px] text-neutral-500 leading-normal">Educational physics utility observing bubble and quicksort passes in real-time.</span>
-              </button>
             </motion.div>
           </div>
         ) : (
@@ -449,11 +399,12 @@ export default function ChatView({
                 themeColors={themeColors}
                 toggleThought={toggleThought}
                 expandedThoughts={expandedThoughts}
-                setSelectedArtifactMessageId={setSelectedArtifactMessageId}
+                setSelectedArtifactMessageId={onSelectArtifactMessageId}
                 selectedArtifactMessageId={selectedArtifactMessageId}
                 isLatest={index === messages.length - 1}
                 streaming={streaming}
                 isNew={mounted && !historicMessageIds.current.has(m.id)}
+                darkMode={darkMode}
               />
             ))}
             {streaming && (
@@ -466,34 +417,34 @@ export default function ChatView({
       </div>
       
       {/* Input controls block */}
-      <div className="shrink-0 p-4 border-t border-neutral-200 bg-white">
-        {/* Core Input Field formulation row */}
-        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto flex flex-col bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-xs focus-within:ring-1 focus-within:ring-neutral-400 focus-within:border-neutral-400 transition-all p-1">
-          {/* Top Panel inside Input - style parameters and indicators */}
-          <div className="px-3 py-1.5 bg-neutral-50/50 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-3 text-[10px] text-neutral-500">
-            <div className="flex items-center gap-1.5 select-none font-bold uppercase tracking-wider text-neutral-400">
-              <span>Engine Status:</span>
-              <span className="text-[10px] text-neutral-700 bg-white px-1.5 py-0.5 rounded-md border border-neutral-200 shadow-3xs font-mono font-bold lowercase">
-                online_active
-              </span>
-            </div>
-
-            {streaming && (
+      <div className={`shrink-0 p-4 border-t transition-colors duration-200 ${
+        darkMode ? 'border-neutral-900 bg-neutral-950' : 'border-neutral-200 bg-[#fbfbf9]'
+      }`}>
+        <form onSubmit={handleSubmit} className={`max-w-3xl mx-auto flex flex-col border rounded-2xl overflow-hidden shadow-xs focus-within:ring-1 transition-all p-1 ${
+          darkMode 
+            ? 'bg-neutral-900 border-neutral-850 focus-within:ring-neutral-700 focus-within:border-neutral-700' 
+            : 'bg-white border-neutral-300 focus-within:ring-neutral-400 focus-within:border-neutral-400 shadow-3xs'
+        }`}>
+          {streaming && (
+            <div className={`px-3 py-1.5 border-b flex items-center justify-end select-none ${
+              darkMode ? 'bg-neutral-950/50 border-neutral-850' : 'bg-neutral-50 border-neutral-200'
+            }`}>
               <button
                 type="button"
                 onClick={onStopStreaming}
-                className="text-rose-600 hover:text-rose-700 font-bold px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 flex items-center gap-1 cursor-pointer transition-colors text-[10px]"
+                className="text-rose-400 hover:text-rose-300 font-bold px-2 py-1 rounded-lg bg-rose-955/20 border border-rose-950 flex items-center gap-1 cursor-pointer transition-colors text-[10px]"
               >
-                <Square className="w-2 h-2 fill-current" />
+                <Square className="w-2.5 h-2.5 fill-current" />
                 <span>Halt Compilation</span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="flex items-start bg-white p-1">
-            {/* Attachment picker */}
+          <div className="flex items-start p-1">
             <div 
-              className="flex flex-col items-center justify-center p-2 border-r border-neutral-200 w-12 hover:bg-neutral-50 transition-colors cursor-pointer select-none"
+              className={`flex flex-col items-center justify-center p-2 border-r w-12 hover:bg-neutral-50/10 transition-colors cursor-pointer select-none ${
+                darkMode ? 'border-neutral-800' : 'border-neutral-200 hover:bg-neutral-100'
+              }`}
               onClick={() => {
                 const input = document.createElement('input');
                 input.type = 'file';
@@ -519,7 +470,7 @@ export default function ChatView({
                 input.click();
               }}
             >
-              <Image className="w-4 h-4 text-neutral-500 hover:text-neutral-800" />
+              <Image className={`w-4 h-4 ${darkMode ? 'text-neutral-400' : 'text-neutral-550'}`} />
               <span className="text-[8px] font-bold mt-1 text-center font-mono tracking-tighter text-neutral-500">Attach</span>
             </div>
 
@@ -535,66 +486,26 @@ export default function ChatView({
                 }
               }}
               rows={2}
-              className="flex-1 bg-transparent py-2.5 px-3 text-[12.5px] leading-relaxed placeholder-neutral-400 font-sans focus:outline-none resize-none max-h-36 min-h-[44px] overflow-y-auto custom-scrollbar"
+              className={`flex-1 bg-transparent py-2.5 px-3 text-[12.5px] leading-relaxed placeholder-neutral-500 font-sans focus:outline-none resize-none max-h-36 min-h-[44px] overflow-y-auto custom-scrollbar ${
+                darkMode ? 'text-white' : 'text-neutral-900'
+              }`}
             />
             
             <button
               type="submit"
               disabled={streaming || !inputValue.trim()}
-              className={`p-2.5 rounded-xl transition-all shrink-0 cursor-pointer mt-1.5 mr-1 ${inputValue.trim() && !streaming ? `${themeColors.primary} text-white` : 'bg-neutral-50 text-neutral-300'}`}
+              className={`p-2.5 rounded-xl transition-all shrink-0 cursor-pointer mt-1.5 mr-1 ${
+                inputValue.trim() && !streaming 
+                  ? (darkMode ? `bg-white text-neutral-950 font-bold` : 'bg-neutral-950 text-white font-bold') 
+                  : (darkMode ? 'bg-neutral-955 text-neutral-700' : 'bg-neutral-100 text-neutral-350')
+              }`}
             >
               <Send className="w-4 h-4" />
             </button>
           </div>
         </form>
-
-        {/* Small templates tags directly under the prompt text box */}
-        <div className="flex flex-wrap items-center gap-1.5 mt-2.5 select-none justify-center">
-          <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider font-mono mr-1">Templates:</span>
-          <button
-            type="button"
-            onClick={() => handleApplyPreset("Generate a high-performance interactive 2D physics bouncing balls simulator using canvas.")}
-            className="px-2.5 py-1 border border-neutral-200 hover:border-neutral-300 rounded-lg bg-neutral-50 hover:bg-white text-[10px] text-neutral-600 font-sans cursor-pointer transition-colors shadow-3xs"
-          >
-            Physics Sandbox
-          </button>
-          <button
-            type="button"
-            onClick={() => handleApplyPreset("Build an elegant responsive analog clock visualizer with customizable local sound ticks.")}
-            className="px-2.5 py-1 border border-neutral-200 hover:border-neutral-300 rounded-lg bg-neutral-50 hover:bg-white text-[10px] text-neutral-600 font-sans cursor-pointer transition-colors shadow-3xs"
-          >
-            Analog Clock
-          </button>
-          <button
-            type="button"
-            onClick={() => handleApplyPreset("Write a robust Roblox modular player movement velocity speed controller in raw Luau.")}
-            className="px-2.5 py-1 border border-neutral-200 hover:border-neutral-300 rounded-lg bg-neutral-50 hover:bg-white text-[10px] text-neutral-600 font-sans cursor-pointer transition-colors shadow-3xs"
-          >
-            Roblox Velocity Controller
-          </button>
-        </div>
       </div>
 
-      <AnimatePresence>
-        {activeArtifact && (
-          <motion.div
-            key={activeArtifact.artifactTitle || 'active-artifact'}
-            initial={{ opacity: 0, width: 0, x: 50 }}
-            animate={{ opacity: 1, width: isArtifactExpanded ? '100%' : '50%', x: 0 }}
-            exit={{ opacity: 0, width: 0, x: 50 }}
-            transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-            className="h-full flex flex-col overflow-hidden shrink-0 z-20 border-l border-[#E5DFD3]"
-          >
-            <ArtifactView 
-              artifact={activeArtifact} 
-              onClose={() => setSelectedArtifactMessageId(null)} 
-              themeColor={userProfile?.themeColor || 'cyan'}
-              isExpanded={isArtifactExpanded}
-              onToggleExpand={() => setIsArtifactExpanded(!isArtifactExpanded)}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

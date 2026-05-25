@@ -1,12 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Send, Terminal, Square, Award, Cpu, Loader2, Image, Layers, ChevronDown, ChevronRight, HelpCircle, Brain, Info, Check, Coins, Lock, Gem, Laptop, Download, Trash2, Plus
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Message, ThemeColors, UserProfile, ViewType } from '../types';
 import ArtifactView from './ArtifactView';
 import { parseMessageArtifacts } from '../utils';
-import StreamingThinkingIndicator from './StreamingThinkingIndicator';
 import NotesView from './NotesView';
 import ChatView from './ChatView';
 
@@ -21,34 +17,16 @@ interface WorkspaceProps {
   userProfile: UserProfile | null;
   themeColors: ThemeColors;
   onOpenPreferences: () => void;
-  // Models and Thinking modes state
   selectedModel: 'mtrini_1_0' | 'mtrini_1_1';
   onSelectModel: (model: 'mtrini_1_0' | 'mtrini_1_1') => void;
   selectedThinking: 'fast' | 'deep' | 'short';
   onSelectThinking: (style: 'fast' | 'deep' | 'short') => void;
   onClearMessages?: () => void;
-}
-
-interface ParsedThought {
-  thought: string;
-  response: string;
-}
-
-function parseMessageThoughts(content: string): ParsedThought {
-  const thoughtStart = content.indexOf('<thought>');
-  if (thoughtStart === -1) {
-    return { thought: '', response: content };
-  }
-  
-  const closingTag = content.indexOf('</thought>');
-  if (closingTag === -1) {
-    const thought = content.substring(thoughtStart + 9);
-    return { thought, response: '' };
-  }
-  
-  const thought = content.substring(thoughtStart + 9, closingTag);
-  const response = content.substring(closingTag + 10);
-  return { thought, response };
+  chatMode: 'mtrini' | 'mtrini-code';
+  onSelectChatMode: (mode: 'mtrini' | 'mtrini-code') => void;
+  selectedArtifactMessageId: string | null;
+  onSelectArtifactMessageId: (msgId: string | null) => void;
+  darkMode?: boolean;
 }
 
 export default function Workspace({
@@ -66,96 +44,92 @@ export default function Workspace({
   onSelectModel,
   selectedThinking,
   onSelectThinking,
-  onClearMessages
+  onClearMessages,
+  chatMode,
+  onSelectChatMode,
+  selectedArtifactMessageId,
+  onSelectArtifactMessageId,
+  darkMode = true
 }: WorkspaceProps) {
-  const [inputValue, setInputValue] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  
-  const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
-  const [selectedArtifactMessageId, setSelectedArtifactMessageId] = useState<string | null>(null);
-
-  const [showMainLogs, setShowMainLogs] = useState(false);
-  const [downloadingClient, setDownloadingClient] = useState(false);
   const [isArtifactExpanded, setIsArtifactExpanded] = useState(false);
-
-  const handleLocalDownload = () => {
-    setDownloadingClient(true);
-    setTimeout(() => {
-      window.location.href = '/api/download/mtrini';
-      setDownloadingClient(false);
-    }, 1200);
-  };
-
-  const handleApplyPreset = (prompt: string) => {
-    setInputValue(prompt);
-  };
 
   // Clear active artifact view when changing chat threads
   useEffect(() => {
-    setSelectedArtifactMessageId(null);
+    onSelectArtifactMessageId(null);
     setIsArtifactExpanded(false);
   }, [activeChatId]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputValue.trim() || streaming) return;
-
-    onSendMessage(inputValue);
-    setInputValue('');
-  };
-
-  const toggleThought = (msgId: string) => {
-    setExpandedThoughts(prev => ({
-      ...prev,
-      [msgId]: !prev[msgId]
-    }));
-  };
-
-  const handleSelectModelWithGate = (modelId: 'mtrini_1_0' | 'mtrini_1_1') => {
-    onSelectModel(modelId);
-  };
-
-  const handleExportMarkdown = () => {
-    if (messages.length === 0) return;
-    const markdownContent = messages.map((m) => {
-      const title = m.role === 'user' ? '### User Question' : '### Mtrini Response';
-      return `${title}\n\n${m.content}\n\n---\n`;
-    }).join('\n');
-    
-    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `mtrini_session_${activeChatId || 'export'}.md`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const activeMessage = messages.find((m) => m.id === selectedArtifactMessageId);
   const activeArtifact = activeMessage ? parseMessageArtifacts(activeMessage.content) : null;
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-neutral-50 font-sans h-full text-neutral-900">
+    <div className={`flex-1 flex overflow-hidden font-sans h-full relative w-full transition-colors duration-200 ${
+      darkMode ? 'bg-neutral-950 text-neutral-100' : 'bg-[#fafaf8] text-neutral-900'
+    }`}>
       {activeView === 'notes' ? (
-        <NotesView userProfile={userProfile} themeColors={themeColors} />
+        <NotesView userProfile={userProfile} themeColors={themeColors} darkMode={darkMode} />
       ) : (
-        <ChatView
-          onNewChat={onNewChat}
-          messages={messages}
-          activeChatId={activeChatId}
-          onSendMessage={onSendMessage}
-          streaming={streaming}
-          onStopStreaming={onStopStreaming}
-          userProfile={userProfile}
-          themeColors={themeColors}
-          onOpenPreferences={onOpenPreferences}
-          selectedModel={selectedModel}
-          onSelectModel={onSelectModel}
-          selectedThinking={selectedThinking}
-          onSelectThinking={onSelectThinking}
-          onClearMessages={onClearMessages}
-        />
+        <div className="flex-1 flex flex-row overflow-hidden h-full w-full relative">
+          <ChatView
+            onNewChat={onNewChat}
+            messages={messages}
+            activeChatId={activeChatId}
+            onSendMessage={onSendMessage}
+            streaming={streaming}
+            onStopStreaming={onStopStreaming}
+            userProfile={userProfile}
+            themeColors={themeColors}
+            onOpenPreferences={onOpenPreferences}
+            selectedModel={selectedModel}
+            onSelectModel={onSelectModel}
+            selectedThinking={selectedThinking}
+            onSelectThinking={onSelectThinking}
+            onClearMessages={onClearMessages}
+            chatMode={chatMode}
+            onSelectChatMode={onSelectChatMode}
+            selectedArtifactMessageId={selectedArtifactMessageId}
+            onSelectArtifactMessageId={onSelectArtifactMessageId}
+            isArtifactExpanded={isArtifactExpanded}
+            hasActiveArtifact={!!activeArtifact}
+            darkMode={darkMode}
+          />
+          
+          {/* Floating/Overlay Script Viewer Modal Window */}
+          <AnimatePresence>
+            {activeArtifact && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-black/70 backdrop-blur-xs">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                  animate={{ 
+                    opacity: 1, 
+                    scale: 1, 
+                    y: 0,
+                    width: isArtifactExpanded ? '100vw' : '85vw',
+                    height: isArtifactExpanded ? '100vh' : '85vh',
+                    maxWidth: isArtifactExpanded ? '100vw' : '1500px',
+                    maxHeight: isArtifactExpanded ? '100vh' : '900px'
+                  }}
+                  exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                  transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+                  className={`flex flex-col overflow-hidden border shadow-2xl transition-all duration-200 ${
+                    isArtifactExpanded ? 'm-0 rounded-none' : 'rounded-2xl'
+                  } ${
+                    darkMode ? 'bg-neutral-900 border-neutral-850' : 'bg-white border-neutral-250'
+                  }`}
+                >
+                  <ArtifactView 
+                    artifact={activeArtifact} 
+                    onClose={() => onSelectArtifactMessageId(null)} 
+                    themeColor={userProfile?.themeColor || 'cyan'}
+                    isExpanded={isArtifactExpanded}
+                    onToggleExpand={() => setIsArtifactExpanded(!isArtifactExpanded)}
+                    darkMode={darkMode}
+                  />
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
       )}
     </div>
   );

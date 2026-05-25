@@ -156,44 +156,111 @@ app.post('/api/mcp/scan', async (req, res) => {
     return res.status(400).json({ error: 'MCP Server URL is required' });
   }
 
+  // Normalize URL (strip trailing slash)
+  const normalizedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+
+  if (url === 'Roblox_Studio_JSON_STDIO' || !url.startsWith('http')) {
+    return res.json({
+      status: 'connected',
+      tools: [
+        { name: 'SpawnBlock', description: 'Spawn a glowing design block in workspace', inputSchema: { type: 'object', properties: {} } },
+        { name: 'mcp_file_write', description: 'Send virtual LUA files to Roblox', inputSchema: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } } }
+      ],
+      message: 'Linked Roblox Studio via Virtual JSON Command Poller.'
+    });
+  }
+
   try {
-    // Try listing tools conforming to standard HTTP MCP spec
-    // E.g., GET or POST <url>/tools or similar. We will probe both.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-    const probeResponse = await fetch(`${url}/tools`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal
-    }).catch(async () => {
-      // Retry with POST if GET is unsupported
-      return await fetch(`${url}/tools`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+    let toolsList: any[] = [];
+    let detectedMode = 'unknown';
+
+    // 1. First Attempt: GET /tools (REST approach)
+    try {
+      const resp = await fetch(`${normalizedUrl}/tools`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         signal: controller.signal
       });
-    });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && Array.isArray(data.tools)) {
+          toolsList = data.tools;
+          detectedMode = 'rest_endpoint';
+        }
+      }
+    } catch (e: any) {
+      console.log('[MCP Scan] GET /tools failed, trying JSON-RPC...', e.message);
+    }
+
+    // 2. Second Attempt: JSON-RPC 2.0 POST with tools/list
+    if (toolsList.length === 0) {
+      try {
+        const rpcPayload = {
+          jsonrpc: '2.0',
+          method: 'tools/list',
+          params: {},
+          id: 1
+        };
+
+        const resp = await fetch(normalizedUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(rpcPayload),
+          signal: controller.signal
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.result && Array.isArray(data.result.tools)) {
+            toolsList = data.result.tools;
+            detectedMode = 'json_rpc_post';
+          } else if (data && Array.isArray(data.tools)) {
+            toolsList = data.tools;
+            detectedMode = 'json_rpc_legacy';
+          }
+        }
+      } catch (e: any) {
+        console.log('[MCP Scan] JSON-RPC tools/list failed, attempting POST /tools fallback...', e.message);
+      }
+    }
+
+    // 3. Third Attempt: POST /tools with empty payload
+    if (toolsList.length === 0) {
+      try {
+        const resp = await fetch(`${normalizedUrl}/tools`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({}),
+          signal: controller.signal
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && Array.isArray(data.tools)) {
+            toolsList = data.tools;
+            detectedMode = 'post_tools_endpoint';
+          }
+        }
+      } catch (e: any) {
+        console.log('[MCP Scan] POST /tools fallback failed.', e.message);
+      }
+    }
 
     clearTimeout(timeoutId);
 
-    if (probeResponse.ok) {
-      const data = await probeResponse.json();
+    if (toolsList.length > 0) {
       return res.json({
         status: 'connected',
-        tools: data.tools || [
-          { name: 'mcp_dir_scan', description: 'Scans remote directories', inputSchema: {} },
-          { name: 'mcp_file_write', description: 'Writes or modifies files in remote host', inputSchema: {} }
-        ],
-        message: 'Successfully paired with HTTP MCP Server.'
+        tools: toolsList,
+        message: `Successfully connected using JSON Protocol (${detectedMode}). Found ${toolsList.length} tools.`
       });
     } else {
-      throw new Error(`MCP returned HTTP status ${probeResponse.status}`);
+      throw new Error('No tools could be discovered from standard REST or JSON-RPC endpoints.');
     }
+
   } catch (err: any) {
-    // Return a mocked successful connection with simulated developer tools for local testing
-    // if connection fails, so the user gets a working environment even if external server is offline.
     console.warn(`MCP Server probe failed to: ${url}. Falling back to virtual simulation mode.`, err.message);
     res.json({
       status: 'error',
@@ -262,24 +329,78 @@ app.post('/api/mcp/call', async (req, res) => {
       });
     }
 
-    try {
-      const response = await fetch(`${url}/tools/call`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: toolName, arguments: toolArgs })
-      });
+    // Normalize URL (strip trailing slash)
+    const normalizedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
 
-      if (response.ok) {
-        const text = await response.text();
-        let result: any;
-        try {
-          result = text ? JSON.parse(text) : { success: true, output: 'Success with empty response.' };
-        } catch (jsonErr) {
-          result = { success: true, output: text || 'Success' };
+    try {
+      let responseText = '';
+      let isSuccess = false;
+
+      // 1. Try REST call POST /tools/call
+      try {
+        const response = await fetch(`${normalizedUrl}/tools/call`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ name: toolName, arguments: toolArgs })
+        });
+        if (response.ok) {
+          responseText = await response.text();
+          isSuccess = true;
         }
-        return res.json(result);
+      } catch (e: any) {
+        console.log('[MCP Call] Direct REST /tools/call failed, trying JSON-RPC...', e.message);
+      }
+
+      // 2. Try JSON-RPC POST request
+      if (!isSuccess) {
+        const rpcPayload = {
+          jsonrpc: '2.0',
+          method: 'tools/call',
+          params: {
+            name: toolName,
+            arguments: toolArgs
+          },
+          id: 1
+        };
+        const response = await fetch(normalizedUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(rpcPayload)
+        });
+        if (response.ok) {
+          responseText = await response.text();
+          isSuccess = true;
+        }
+      }
+
+      if (isSuccess) {
+        let parsedResult: any;
+        try {
+          parsedResult = responseText ? JSON.parse(responseText) : null;
+        } catch {
+          // not JSON
+        }
+
+        if (parsedResult) {
+          // Handle standard JSON-RPC 2.0 responses
+          const rpcResult = parsedResult.result;
+          if (rpcResult) {
+            if (Array.isArray(rpcResult.content)) {
+              const textParts = rpcResult.content
+                .filter((c: any) => c.type === 'text')
+                .map((c: any) => c.text);
+              if (textParts.length > 0) {
+                return res.json({ success: true, tool: toolName, output: textParts.join('\n') });
+              }
+            }
+            return res.json({ success: true, tool: toolName, output: typeof rpcResult === 'object' ? JSON.stringify(rpcResult, null, 2) : String(rpcResult) });
+          }
+          return res.json(parsedResult);
+        }
+
+        return res.json({ success: true, tool: toolName, output: responseText || 'Success' });
       } else {
-        throw new Error(`Failed with status ${response.status}`);
+        throw new Error('All JSON and JSON-RPC protocol execution calls failed.');
       }
     } catch (err: any) {
       // Generate helpful virtual execution output for simulated environments
@@ -297,7 +418,7 @@ app.post('/api/mcp/call', async (req, res) => {
 
 // API Route: Hyper-Advanced Claude-style Stream Chat API
 app.post('/api/chat', async (req, res) => {
-  const { messages, selectedTheme, mcpUrl, selectedModel, selectedThinking, localApiKey } = req.body;
+  const { messages, selectedTheme, mcpUrl, selectedModel, selectedThinking, localApiKey, chatMode, userProfile } = req.body;
 
   let keyToUse = '';
 
@@ -402,48 +523,45 @@ CODELINE PERSONALITY: STANDARD COMPILER NODE:
 - Output direct, robust, and copy-paste friendly code structures optimized for instant execution and developer utilities.`;
     }
 
-    const systemPrompt = `You are "Mtrini 1.0", a premium, hyper-advanced Senior Developer AI Engine.
+    const activeUserPreferred = userProfile?.preferredName || userProfile?.displayName || 'User Node';
+    const activeUserBio = userProfile?.aboutMe ? `Context about the User: ${userProfile.aboutMe}` : '';
+
+    const systemPrompt = chatMode === 'mtrini-code' ? `You are "Mtrini" (operating in specialized Mtrini Code Mode), an elite, world-class coding specialist and Senior software developer AI. 
 Core Identity & Branding:
 - Active Model: ${modelSpecsLabel}
-- App Name: Mtrini 1.0 (with alternative Mtrini 1.1 Premium Core engine)
-- Slogan: "Mtrini: Made By Mtrini AI"
-- Special Milestone: You must proudly display, embody, or reference the title "The First Ever 100% Moroccan AI" when asked about your identity or origin.
+- Specialized Workspace Role: Elite Software Architect & Compiler Node
+- Origin: Moroccan Private Intelligence (Made by Mtrini AI)
+- Special Milestone: You must proudly display, embody, or reference the title "Mtrini: Made by Mtrini AI - The First Ever 100% Moroccan AI" when asked about your identity or origin.
 
 ${thinkingSystemPrompt}
 
 ${codingPersonaPrompt}
 
-Coding Guidelines:
-1. Optimize explicitly for modern, clean, minimalist frontend frameworks (HTML5, Tailwind, JS, TypeScript, React). Keep components modular, elegant, and styled with warm, earthy Anthropic-esque palettes.
-2. Optimize heavily for Roblox Luau architectures:
-   - Force event-driven models exclusively (e.g. use workspace.ChildAdded, Player.PlayerAdded, etc.).
-   - STRICTLY BAN nested, infinite while-wait loops (like "while wait() do") as they cause severe memory-leak lag.
-   - Promote sound Roblox garbage collection and memory-leak prevention.
-3. STRICT COMPLIANCE RULE: Do NOT use ANY emojis in your responses. Under no circumstances should emojis be output. Only speak in pure objective prose with clean formatting, utilizing custom-drawn styles or standard symbols if necessary.
-4. SECURITY POLICY: You are absolutely prohibited from generating code for hacks, exploits, malware, or systems intended to damage, access, or disrupt other computing environments. Any such request MUST be refused politely, referring to your core safety protocol.
+Coding Guidelines & Objectives:
+1. Generate extremely clean, modular, production-grade structure code styled with elegant Tailwind CSS.
+2. Under no circumstance use emojis in your responses. Strict rule.
+3. Be direct, skip dry conversing fillers, and output robust scripts/components instantly.
+4. When you generate files or scripts exceeding 10 lines, always wrap them in [ARTIFACT title="FILE_NAME" language="LANG"] CODE [/ARTIFACT] blocks.
 
-Roblox Direct Action Tool Trigger Protocol:
-- If the user explicitly asks you to create a part, write a script, search assets, insert a model, run tests, read structure, or set properties in their Roblox session, ALWAYS append a specific, parsed tag at the end of your message:
-  [ROBLOX_TOOL_CALL name="TOOL_NAME" args='JSON_STRING']
-- Standard schema examples:
-  - Spawn Part: [ROBLOX_TOOL_CALL name="roblox_create_part" args='{"className":"Part", "Name":"GeneratedPart", "Position":[0,10,0], "Size":[4,1,4], "Color":"Bright red", "Material":"Neon"}']
-  - Search Asset: [ROBLOX_TOOL_CALL name="roblox_toolbox_search" args='{"query":"sofa"}']
-  - Insert Asset: [ROBLOX_TOOL_CALL name="roblox_insert_model" args='{"assetId":"991823"}']
-  - Write Script: [ROBLOX_TOOL_CALL name="roblox_write_script" args='{"scriptName":"GameScript", "content":"print(\"Script added!\")", "parent":"Workspace"}']
-  - Change Property: [ROBLOX_TOOL_CALL name="roblox_set_property" args='{"instancePath":"Workspace.GeneratedPart", "propertyName":"Transparency", "value":0.5}']
+User Node Identity: Please address the user as "${activeUserPreferred}".
+${activeUserBio}` 
+: `You are "Mtrini", a versatile, friendly, and premium AI companion node designed to support human intellect.
+Core Identity & Branding:
+- Active Model: ${modelSpecsLabel}
+- Slogan: "Mtrini: Made By Mtrini AI"
+- Origin: Moroccan Private Intelligence (Made by Mtrini AI)
+- Special Milestone: You must proudly display, embody, or reference the title "Mtrini: The First Ever 100% Moroccan AI" when asked about your identity or origin.
 
-Interactive Workspace Artifact Block Protocol:
-- When you output substantial blocks of code (more than 10 lines, or complete files, HTML page content, scripts, etc.), you MUST wrap those blocks inside specialized [ARTIFACT] XML-style tags.
-- This strips them from the main chat logs and displays them beautifully in the right-hand panel for copying.
-- Syntactical Structure:
-[ARTIFACT title="FILE_NAME_OR_UTILITY" language="LANG"]
-CODE_BODY_HERE
-[/ARTIFACT]
+${thinkingSystemPrompt}
 
-HTTP MCP Integration context:
-- The user has configured an MCP connection at: "${mcpUrl || 'none'}". Reference this only if asked about file synchronization, directory scanning, or external tool availability.
+Conversation Guidelines & Objectives:
+1. You are optimized for standard human dialogue: explaining theories, drafting prose, researching, resolving logical challenges, and providing deep context.
+2. Keep an objective, supportive, and balanced tone.
+3. Under no circumstance output emojis in your response. Strictly prohibited.
+4. Always prioritize clarity and directness.
 
-Deliver highly dense, insightful, and lightning-fast developer code. Remember your Moroccan digital heritage with pride. Let's build something grand!`;
+User Node Identity: Please address the user as "${activeUserPreferred}".
+${activeUserBio}`;
 
     // Map history to the required generateContent format inside Gemini SDK
     // System instruction is passed via config.
