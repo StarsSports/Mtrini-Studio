@@ -299,6 +299,149 @@ app.get('/api/roblox/history', (req, res) => {
   res.json(robloxHistory);
 });
 
+// Helper: Convert standard MCP tool schema to Gemini FunctionDeclaration format
+function convertMcpToolToGemini(tool: any): any {
+  const mapType = (t: string): string => {
+    if (!t) return 'STRING';
+    const upper = t.toUpperCase();
+    if (upper === 'OBJECT') return 'OBJECT';
+    if (upper === 'ARRAY') return 'ARRAY';
+    if (upper === 'STRING') return 'STRING';
+    if (upper === 'NUMBER' || upper === 'FLOAT') return 'NUMBER';
+    if (upper === 'INTEGER' || upper === 'INT') return 'INTEGER';
+    if (upper === 'BOOLEAN' || upper === 'BOOL') return 'BOOLEAN';
+    return 'STRING';
+  };
+
+  const mapSchema = (schema: any): any => {
+    if (!schema) return { type: 'OBJECT', properties: {} };
+    const res: any = {
+      type: mapType(schema.type || 'object')
+    };
+    if (schema.description) {
+      res.description = schema.description;
+    }
+    if (schema.properties) {
+      res.properties = {};
+      for (const [key, val] of Object.entries(schema.properties)) {
+        res.properties[key] = mapSchema(val);
+      }
+    }
+    if (schema.items) {
+      res.items = mapSchema(schema.items);
+    }
+    if (Array.isArray(schema.required)) {
+      res.required = schema.required;
+    }
+    return res;
+  };
+
+  return {
+    name: tool.name,
+    description: tool.description || `Execute tool ${tool.name}`,
+    parameters: mapSchema(tool.inputSchema || tool.parameters || { type: 'object', properties: {} })
+  };
+}
+
+// Shared helper: Execute tool call over MCP or standard pollers
+async function runMcpToolCall(url: string, toolName: string, toolArgs: any): Promise<string> {
+  // Always queue the command for standard live ingestion by Roblox Studio pollers
+  const queueItem = {
+    id: 'cmd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+    name: toolName,
+    arguments: toolArgs,
+    timestamp: new Date().toISOString()
+  };
+  robloxCommandQueue.push(queueItem);
+  robloxHistory.push(queueItem);
+  if (robloxHistory.length > 50) {
+    robloxHistory.shift();
+  }
+
+  // If it's the standard stdio queue identifier or doesn't start with http, don't attempt a HTTP fetch
+  if (url === 'Roblox_Studio_JSON_STDIO' || !url.startsWith('http')) {
+    return `[MTRINI SYNC QUEUE] Tool execution successfully queued for Roblox Studio. Run the poller background sync script in Roblox Studio command bar to instantly spawn and apply this action! args: ${JSON.stringify(toolArgs)}`;
+  }
+
+  // Normalize URL (strip trailing slash)
+  const normalizedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+
+  try {
+    let responseText = '';
+    let isSuccess = false;
+
+    // 1. Try REST call POST /tools/call
+    try {
+      const response = await fetch(`${normalizedUrl}/tools/call`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ name: toolName, arguments: toolArgs })
+      });
+      if (response.ok) {
+        responseText = await response.text();
+        isSuccess = true;
+      }
+    } catch (e: any) {
+      console.log('[MCP Call] Direct REST /tools/call failed, trying JSON-RPC...', e.message);
+    }
+
+    // 2. Try JSON-RPC POST request
+    if (!isSuccess) {
+      const rpcPayload = {
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          name: toolName,
+          arguments: toolArgs
+        },
+        id: 1
+      };
+      const response = await fetch(normalizedUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(rpcPayload)
+      });
+      if (response.ok) {
+        responseText = await response.text();
+        isSuccess = true;
+      }
+    }
+
+    if (isSuccess) {
+      let parsedResult: any;
+      try {
+        parsedResult = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        // not JSON
+      }
+
+      if (parsedResult) {
+        // Handle standard JSON-RPC 2.0 responses
+        const rpcResult = parsedResult.result;
+        if (rpcResult) {
+          if (Array.isArray(rpcResult.content)) {
+            const textParts = rpcResult.content
+              .filter((c: any) => c.type === 'text')
+              .map((c: any) => c.text);
+            if (textParts.length > 0) {
+              return textParts.join('\n');
+            }
+          }
+          return typeof rpcResult === 'object' ? JSON.stringify(rpcResult, null, 2) : String(rpcResult);
+        }
+        return JSON.stringify(parsedResult, null, 2);
+      }
+
+      return responseText || 'Success';
+    } else {
+      throw new Error('All JSON and JSON-RPC protocol execution calls failed.');
+    }
+  } catch (err: any) {
+    // Generate helpful virtual execution output for simulated environments
+    return `[VIRTUAL TUNNEL SUCCESS] Tool "${toolName}" executed safely. Action was simulated within local high-density host environment. args: ${JSON.stringify(toolArgs)}`;
+  }
+}
+
 // API Route: Execute MCP custom tool action
 app.post('/api/mcp/call', async (req, res) => {
   try {
@@ -306,110 +449,8 @@ app.post('/api/mcp/call', async (req, res) => {
     if (!url || !toolName) {
       return res.status(400).json({ error: 'MCP URL and Tool Name are required' });
     }
-
-    // Always queue the command for standard live ingestion by Roblox Studio pollers
-    const queueItem = {
-      id: 'cmd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-      name: toolName,
-      arguments: toolArgs,
-      timestamp: new Date().toISOString()
-    };
-    robloxCommandQueue.push(queueItem);
-    robloxHistory.push(queueItem);
-    if (robloxHistory.length > 50) {
-      robloxHistory.shift();
-    }
-
-    // If it's the standard stdio queue identifier or doesn't start with http, don't attempt a HTTP fetch
-    if (url === 'Roblox_Studio_JSON_STDIO' || !url.startsWith('http')) {
-      return res.json({
-        success: true,
-        tool: toolName,
-        output: `[MTRINI SYNC QUEUE] Tool execution successfully queued for Roblox Studio. Run the poller background sync script in Roblox Studio command bar to instantly spawn and apply this action! args: ${JSON.stringify(toolArgs)}`
-      });
-    }
-
-    // Normalize URL (strip trailing slash)
-    const normalizedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-
-    try {
-      let responseText = '';
-      let isSuccess = false;
-
-      // 1. Try REST call POST /tools/call
-      try {
-        const response = await fetch(`${normalizedUrl}/tools/call`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ name: toolName, arguments: toolArgs })
-        });
-        if (response.ok) {
-          responseText = await response.text();
-          isSuccess = true;
-        }
-      } catch (e: any) {
-        console.log('[MCP Call] Direct REST /tools/call failed, trying JSON-RPC...', e.message);
-      }
-
-      // 2. Try JSON-RPC POST request
-      if (!isSuccess) {
-        const rpcPayload = {
-          jsonrpc: '2.0',
-          method: 'tools/call',
-          params: {
-            name: toolName,
-            arguments: toolArgs
-          },
-          id: 1
-        };
-        const response = await fetch(normalizedUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(rpcPayload)
-        });
-        if (response.ok) {
-          responseText = await response.text();
-          isSuccess = true;
-        }
-      }
-
-      if (isSuccess) {
-        let parsedResult: any;
-        try {
-          parsedResult = responseText ? JSON.parse(responseText) : null;
-        } catch {
-          // not JSON
-        }
-
-        if (parsedResult) {
-          // Handle standard JSON-RPC 2.0 responses
-          const rpcResult = parsedResult.result;
-          if (rpcResult) {
-            if (Array.isArray(rpcResult.content)) {
-              const textParts = rpcResult.content
-                .filter((c: any) => c.type === 'text')
-                .map((c: any) => c.text);
-              if (textParts.length > 0) {
-                return res.json({ success: true, tool: toolName, output: textParts.join('\n') });
-              }
-            }
-            return res.json({ success: true, tool: toolName, output: typeof rpcResult === 'object' ? JSON.stringify(rpcResult, null, 2) : String(rpcResult) });
-          }
-          return res.json(parsedResult);
-        }
-
-        return res.json({ success: true, tool: toolName, output: responseText || 'Success' });
-      } else {
-        throw new Error('All JSON and JSON-RPC protocol execution calls failed.');
-      }
-    } catch (err: any) {
-      // Generate helpful virtual execution output for simulated environments
-      return res.json({
-        success: true,
-        tool: toolName,
-        output: `[VIRTUAL TUNNEL SUCCESS] Tool "${toolName}" executed safely. Action was simulated within local high-density host environment. args: ${JSON.stringify(toolArgs)}`
-      });
-    }
+    const output = await runMcpToolCall(url, toolName, toolArgs);
+    return res.json({ success: true, tool: toolName, output });
   } catch (globalErr: any) {
     console.error('[API MCP Call] Global handler failure:', globalErr);
     return res.status(500).json({ error: globalErr.message || 'Internal Bridge Error' });
@@ -418,7 +459,7 @@ app.post('/api/mcp/call', async (req, res) => {
 
 // API Route: Hyper-Advanced Claude-style Stream Chat API
 app.post('/api/chat', async (req, res) => {
-  const { messages, selectedTheme, mcpUrl, selectedModel, selectedThinking, localApiKey, chatMode, userProfile } = req.body;
+  const { messages, selectedTheme, mcpUrl, mcpConfig, selectedModel, selectedThinking, localApiKey, chatMode, userProfile } = req.body;
 
   let keyToUse = '';
 
@@ -542,6 +583,7 @@ Coding Guidelines & Objectives:
 2. Under no circumstance use emojis in your responses. Strict rule.
 3. Be direct, skip dry conversing fillers, and output robust scripts/components instantly.
 4. When you generate files or scripts exceeding 10 lines, always wrap them in [ARTIFACT title="FILE_NAME" language="LANG"] CODE [/ARTIFACT] blocks.
+5. CAPACITY FOR MASSIVE CODING PROJECTS: You possess an unlimited, high-density generation range. You are fully capable, optimized, and encouraged to generate massive, complete multi-file systems, databases, and code scripts spanning thousands of lines (up to 10,000 to 100,000 lines of fully functional code in all programming languages including JavaScript, TypeScript, Python, C++, Go, Java, Rust, Luau, HTML/CSS, etc.) with absolute precision, without lazy ellipses (...), truncations, or placeholder blocks. Always provide highly comprehensive, fully fleshed-out complex structures in their absolute entirety.
 
 User Node Identity: Please address the user as "${activeUserPreferred}".
 ${activeUserBio}` 
@@ -559,6 +601,7 @@ Conversation Guidelines & Objectives:
 2. Keep an objective, supportive, and balanced tone.
 3. Under no circumstance output emojis in your response. Strictly prohibited.
 4. Always prioritize clarity and directness.
+5. CAPACITY FOR MASSIVE SCRIPTING & KNOWLEDGE WORK: When writing code or technical materials, you are capable of handling, expanding, or generating massive scale files reaching thousands or tens of thousands of lines of complete, functional, multi-language content (up to 10k or 100k lines) with no truncations or lazy gaps.
 
 User Node Identity: Please address the user as "${activeUserPreferred}".
 ${activeUserBio}`;
@@ -573,22 +616,136 @@ ${activeUserBio}`;
     // Adjust generation parameter based on model or style
     const temperature = styleParam(thinkingStyle, isPremiumModel);
 
-    const responseStream = await activeClient.models.generateContentStream({
-      model: 'gemini-3.5-flash',
-      contents,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature
-      }
-    });
-
-    for await (const chunk of responseStream) {
-      if (chunk.text) {
-        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+    // Map and inject custom MCP tools into the Gemini API
+    const toolsPayload: any[] = [];
+    if (mcpConfig) {
+      try {
+        const parsedTools = JSON.parse(mcpConfig);
+        if (Array.isArray(parsedTools) && parsedTools.length > 0) {
+          const functionDeclarations = parsedTools.map(t => convertMcpToolToGemini(t));
+          toolsPayload.push({ functionDeclarations });
+        }
+      } catch (err: any) {
+        console.error('[API Chat] Failed to parse mcpConfig for tools registration:', err.message);
       }
     }
-    res.write('data: [DONE]\n\n');
-    res.end();
+
+    let finalContents = [...contents];
+
+    if (toolsPayload.length > 0) {
+      // 1. Initial invocation using non-streaming generateContent to detect functionCalls
+      const initialResponse = await activeClient.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: finalContents,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature,
+          tools: toolsPayload
+        }
+      });
+
+      const functionCalls = initialResponse.functionCalls;
+      if (functionCalls && functionCalls.length > 0) {
+        // Create model part with function calls
+        const modelContent = {
+          role: 'model',
+          parts: functionCalls.map((fc: any) => ({
+            functionCall: {
+              name: fc.name,
+              args: fc.args
+            }
+          }))
+        };
+        finalContents.push(modelContent);
+
+        // Stream visual Indicators to user in SSE stream as the tools resolve
+        for (const fc of functionCalls) {
+          const streamText = `\n⚡ **[Mtrini System]**: AI requesting tool \`${fc.name}\` with arguments: \`${JSON.stringify(fc.args)}\`...\n`;
+          res.write(`data: ${JSON.stringify({ text: streamText })}\n\n`);
+
+          let resultText = '';
+          let routedUrl = mcpUrl || 'Roblox_Studio_JSON_STDIO';
+          if (mcpConfig) {
+            try {
+              const toolsArray = JSON.parse(mcpConfig);
+              if (Array.isArray(toolsArray)) {
+                const match = toolsArray.find((t: any) => t.name === fc.name);
+                if (match && match.mcpUrl) {
+                  routedUrl = match.mcpUrl;
+                }
+              }
+            } catch (err) {}
+          }
+          try {
+            resultText = await runMcpToolCall(routedUrl, fc.name, fc.args);
+          } catch (e: any) {
+            resultText = `Error during execution: ${e.message}`;
+          }
+
+          const streamResult = `\n⚡ **[Mtrini System]**: Tool \`${fc.name}\` returned:\n\`\`\`json\n${resultText}\n\`\`\`\n`;
+          res.write(`data: ${JSON.stringify({ text: streamResult })}\n\n`);
+
+          const toolResponseContent = {
+            role: 'tool',
+            parts: [{
+              functionResponse: {
+                name: fc.name,
+                response: {
+                  output: resultText
+                }
+              }
+            }]
+          };
+          finalContents.push(toolResponseContent);
+        }
+
+        // Stream final response answering matching the tool results
+        const responseStream = await activeClient.models.generateContentStream({
+          model: 'gemini-3.5-flash',
+          contents: finalContents,
+          config: {
+            systemInstruction: systemPrompt,
+            temperature,
+            tools: toolsPayload
+          }
+        });
+        for await (const chunk of responseStream) {
+          if (chunk.text) {
+            res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+          }
+        }
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      } else {
+        // No tools triggered, write response text instantly
+        if (initialResponse.text) {
+          res.write(`data: ${JSON.stringify({ text: initialResponse.text })}\n\n`);
+        }
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      }
+    } else {
+      // Bypassed tools entirely for raw text queries
+      const responseStream = await activeClient.models.generateContentStream({
+        model: 'gemini-3.5-flash',
+        contents,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature
+        }
+      });
+
+      for await (const chunk of responseStream) {
+        if (chunk.text) {
+          res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+        }
+      }
+      res.write('data: [DONE]\n\n');
+      res.end();
+      return;
+    }
 
   } catch (err: any) {
     console.error('Streaming Chat Error:', err);

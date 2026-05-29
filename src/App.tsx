@@ -251,6 +251,7 @@ export default function App() {
           bridgeUrl: data.bridgeUrl || '',
           isPremiumActive: true,
           mcpConfig: resolvedMcpConfig,
+          mcpServersJson: data.mcpServersJson || '',
           createdAt: data.createdAt?.toDate() || new Date()
         });
       } else {
@@ -265,6 +266,7 @@ export default function App() {
           bridgeUrl: '',
           isPremiumActive: true,
           mcpConfig: '',
+          mcpServersJson: '',
           createdAt: new Date()
         };
         await setDoc(doc(db, 'users', user.uid), {
@@ -277,6 +279,7 @@ export default function App() {
           bridgeUrl: newProfile.bridgeUrl || '',
           isPremiumActive: true,
           mcpConfig: '',
+          mcpServersJson: '',
           createdAt: serverTimestamp()
         });
         setUserProfile(newProfile);
@@ -708,6 +711,7 @@ export default function App() {
             messages: updatedHistory.map(m => ({ role: m.role, content: m.content })),
             selectedTheme: userProfile.themeColor,
             mcpUrl: userProfile.mcpServer || '',
+            mcpConfig: userProfile.mcpConfig || '',
             selectedModel,
             selectedThinking,
             localApiKey,
@@ -830,6 +834,7 @@ CORE OBJECTIVES:
 3. Skip talkative introductions or conversational fillers; dive directly into high-fidelity technical specs and code artifacts.
 4. Strictly do NOT use emojis.
 5. Wrap comprehensive files or scripts exceeding 10 lines in [ARTIFACT title="..." language="..."]CODE[/ARTIFACT] blocks.
+6. CAPACITY FOR MASSIVE CODING PROJECTS: You possess an unlimited, high-density generation range. You are fully capable, optimized, and encouraged to generate massive, complete multi-file systems, databases, and code scripts spanning thousands of lines (up to 10,000 to 100,000 lines of fully functional code in all programming languages including JavaScript, TypeScript, Python, C++, Go, Java, Rust, Luau, HTML/CSS, etc.) with absolute precision, without lazy ellipses (...), truncations, or placeholder blocks. Always provide highly comprehensive, fully fleshed-out complex structures in their absolute entirety.
 
 User Node Identity: Please address the user as "${activeUserPreferred}".
 ${activeUserBio}` 
@@ -839,6 +844,7 @@ CORE OBJECTIVES:
 2. Keep an objective, supportive, and balanced tone.
 3. Strictly do NOT use emojis.
 4. Wrap comprehensive blocks of code or files in [ARTIFACT title="..." language="..."]CODE[/ARTIFACT] blocks if they occur.
+5. CAPACITY FOR MASSIVE SCRIPTING & KNOWLEDGE WORK: When writing code or technical materials, you are capable of handling, expanding, or generating massive scale files reaching thousands or tens of thousands of lines of complete, functional, multi-language content (up to 10k or 100k lines) with no truncations or lazy gaps.
 
 User Node Identity: Please address the user as "${activeUserPreferred}".
 ${activeUserBio}`;

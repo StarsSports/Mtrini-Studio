@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Send, Terminal, Square, ChevronDown, ChevronRight, Brain, Plus, Trash2, Download, Image, Sparkles, Layers, FileCode
+  Send, Terminal, Square, ChevronDown, ChevronRight, Brain, Plus, Trash2, Download, Image, Sparkles, Layers, FileCode, AlertCircle,
+  MessageSquare, FileText, Sliders, HelpCircle, BookOpen
 } from 'lucide-react';
 import { Message, ThemeColors, UserProfile } from '../types';
 import { parseMessageArtifacts } from '../utils';
@@ -357,12 +358,12 @@ export default function ChatView({
         darkMode ? 'bg-neutral-950' : 'bg-[#fafaf8]'
       }`}>
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center p-6 text-center select-none space-y-5 max-w-xl mx-auto py-16">
+          <div className="h-full flex flex-col items-center justify-center p-4 text-center select-none space-y-6 max-w-2xl mx-auto py-12">
             <motion.div 
               initial={{ scale: 0.94, opacity: 0, y: 15 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               transition={{ duration: 0.45, ease: 'easeOut' }}
-              className="space-y-4"
+              className="space-y-6 w-full"
             >
               <div className="flex justify-center">
                 <motion.div 
@@ -370,22 +371,97 @@ export default function ChatView({
                   animate={{ rotate: 0, scale: 1 }}
                   transition={{ type: 'spring', delay: 0.1, stiffness: 200, damping: 15 }}
                   className={`p-4 border rounded-2xl shadow-xl relative ${
-                    darkMode ? 'bg-neutral-900 border-neutral-850' : 'bg-white border-neutral-250 shadow-sm'
+                    darkMode ? 'bg-neutral-900 border-neutral-850' : 'bg-white border-neutral-250 shadow-xs'
                   }`}
                 >
                   <Sparkles className={`w-8 h-8 ${themeColors.text} animate-pulse`} />
                 </motion.div>
               </div>
-              <h2 className={`text-2xl font-sans font-extrabold tracking-tight leading-tight ${
-                darkMode ? 'text-white' : 'text-neutral-900'
-              }`}>
-                Welcome, {userProfile?.preferredName || userProfile?.displayName || 'User'}
-              </h2>
-              <p className="text-xs text-neutral-450 max-w-sm mx-auto leading-relaxed">
-                {chatMode === 'mtrini-code' 
-                  ? "Mtrini Code Mode is currently active. Ask me about system designs, complex file code, algorithms, or web layouts. I am fully optimized to build, compile, and refine."
-                  : "Mtrini Mode is currently active. Ask questions, brainstorm concepts, translate ideas, or have everyday creative discussions."}
-              </p>
+
+              <div className="space-y-2">
+                <h2 className={`text-2xl font-sans font-extrabold tracking-tight leading-tight ${
+                  darkMode ? 'text-white' : 'text-neutral-900'
+                }`}>
+                  Hey there, {userProfile?.preferredName || userProfile?.displayName || 'Friend'}! 🌟
+                </h2>
+                <p className="text-[13px] text-neutral-450 max-w-lg mx-auto leading-relaxed">
+                  We've been working hard on this project for <strong className={`${darkMode ? 'text-neutral-200' : 'text-neutral-800'}`}>1 week now</strong>! To celebrate and keep things simple, here is a quick beginner-friendly guide to your ultimate workspace.
+                </p>
+              </div>
+
+              {/* Pillars explanation grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-left pt-2">
+                <div className={`p-4 rounded-xl border transition-all ${
+                  darkMode ? 'bg-neutral-900/60 border-neutral-850 text-neutral-300' : 'bg-white border-neutral-250 text-neutral-700 shadow-3xs'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="p-1 px-1.5 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                      <MessageSquare className="w-4 h-4" />
+                    </div>
+                    <h3 className={`font-bold text-xs ${darkMode ? 'text-white' : 'text-neutral-900'}`}>1. Ask & Chat</h3>
+                  </div>
+                  <p className="text-[11px] text-neutral-500 leading-relaxed">
+                    Type any question, script requirement, or creative idea in the chat. Mtrini handles everything easily.
+                  </p>
+                </div>
+
+                <div className={`p-4 rounded-xl border transition-all ${
+                  darkMode ? 'bg-neutral-900/60 border-neutral-850 text-neutral-300' : 'bg-white border-neutral-250 text-neutral-700 shadow-3xs'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="p-1 px-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <h3 className={`font-bold text-xs ${darkMode ? 'text-white' : 'text-neutral-900'}`}>2. Save Notes</h3>
+                  </div>
+                  <p className="text-[11px] text-neutral-500 leading-relaxed">
+                    Switch to the <strong className="font-semibold text-neutral-400">Notes</strong> tab in the sidebar to write down requirements, save key steps, and export markdown drafts.
+                  </p>
+                </div>
+
+                <div className={`p-4 rounded-xl border transition-all ${
+                  darkMode ? 'bg-neutral-900/60 border-neutral-850 text-neutral-300' : 'bg-white border-neutral-250 text-neutral-700 shadow-3xs'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="p-1 px-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      <Sliders className="w-4 h-4" />
+                    </div>
+                    <h3 className={`font-bold text-xs ${darkMode ? 'text-white' : 'text-neutral-900'}`}>3. Interactive Sandbox</h3>
+                  </div>
+                  <p className="text-[11px] text-neutral-500 leading-relaxed">
+                    Jump to the <strong className="font-semibold text-neutral-400">Sandbox</strong> panel to run debug commands, verify routes, and inspect live handshakes.
+                  </p>
+                </div>
+              </div>
+
+              {/* Starter suggestions */}
+              <div className="space-y-2 pt-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 block">
+                  🚀 Or try a friendly quick-start query:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl mx-auto">
+                  {[
+                    { label: "💡 Explain coding basics simply", text: "I'm a beginner, and we have been working on this for 1 week now. Could you explain the absolute basics of HTML, CSS, and how to get started in simple, plain English?" },
+                    { label: "📝 Draft a simple responsive layout", text: "Can you design a beautiful, fully complete HTML web design showing a minimalist portfolio layout with beautiful responsive Tailwind spacing?" },
+                    { label: "📋 Create my first checklist model", text: "Please help me write a step-by-step master checklist timeline to learn React component architectures in a simple and beginner-friendly format." },
+                    { label: "🔍 Help me debug some basic errors", text: "What are some of the most common mistakes beginners make in JavaScript regarding variables, state, or conditional rendering? Provide easy examples." }
+                  ].map((item, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setInputValue(item.text)}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer text-xs flex flex-col gap-1 hover:scale-[1.01] active:scale-[0.99] ${
+                        darkMode 
+                          ? 'bg-neutral-900 border-neutral-850 text-neutral-350 hover:border-neutral-700 hover:text-white' 
+                          : 'bg-white border-neutral-250 hover:bg-neutral-50 text-neutral-750 hover:border-neutral-450 shadow-3xs'
+                      }`}
+                    >
+                      <span className={`font-bold leading-tight ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{item.label}</span>
+                      <span className="text-[10px] text-neutral-500 line-clamp-1 truncate">{item.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </motion.div>
           </div>
         ) : (
@@ -504,6 +580,12 @@ export default function ChatView({
             </button>
           </div>
         </form>
+        <div className="max-w-3xl mx-auto flex items-center justify-center gap-1.5 mt-2 select-none text-center px-4">
+          <AlertCircle className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+          <span className="text-[10px] text-neutral-500 font-sans tracking-wide">
+            Mtrini is an AI assistant and it can make mistakes. Consider verifying important code structures.
+          </span>
+        </div>
       </div>
 
     </div>

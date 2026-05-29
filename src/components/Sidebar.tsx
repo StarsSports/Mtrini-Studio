@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { 
-  MessageSquare, Plus, LogOut, Settings, Terminal, Trash2, Sparkles, Sun, Moon
+  MessageSquare, Plus, LogOut, Settings, Terminal, Trash2, Sparkles, Sun, Moon, Smartphone
 } from 'lucide-react';
 import { ChatThread, UserProfile, ThemeColors, ViewType } from '../types';
 
@@ -106,21 +106,27 @@ export default function Sidebar({
 
       {/* Threads Section */}
       <div className="px-4 py-2 mt-2 text-[10px] font-bold tracking-wider text-neutral-500 uppercase flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 overflow-x-auto select-none no-scrollbar max-w-full">
            <button 
              onClick={() => onSelectView('chat')}
-             className={activeView === 'chat' ? (darkMode ? 'text-white' : 'text-neutral-900') : 'text-neutral-550 hover:text-white'}>
-              Recent Chats
+             className={`cursor-pointer transition-colors shrink-0 ${activeView === 'chat' ? (darkMode ? 'text-white font-extrabold' : 'text-neutral-900 font-extrabold') : (darkMode ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-700')}`}>
+              Chats
            </button>
-           <span className="text-neutral-500">/</span>
+           <span className="text-neutral-600 select-none px-0.5">/</span>
            <button 
              onClick={() => onSelectView('notes')}
-             className={activeView === 'notes' ? (darkMode ? 'text-white' : 'text-neutral-900') : 'text-neutral-550 hover:text-white'}>
+             className={`cursor-pointer transition-colors shrink-0 ${activeView === 'notes' ? (darkMode ? 'text-white font-extrabold' : 'text-neutral-900 font-extrabold') : (darkMode ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-700')}`}>
               Notes
            </button>
+           <span className="text-neutral-600 select-none px-0.5">/</span>
+           <button 
+             onClick={() => onSelectView('tools')}
+             className={`cursor-pointer transition-colors shrink-0 ${activeView === 'tools' ? (darkMode ? 'text-white font-extrabold' : 'text-neutral-900 font-extrabold') : (darkMode ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-500 hover:text-neutral-700')}`}>
+              Sandbox
+           </button>
         </div>
-        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${darkMode ? 'bg-neutral-900 border border-neutral-805 text-neutral-450' : 'bg-neutral-200 text-neutral-700'}`}>
-          {activeView === 'chat' ? chatThreads.length : '...'}
+        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 select-none ${darkMode ? 'bg-neutral-900 border border-neutral-805 text-neutral-450' : 'bg-neutral-200 text-neutral-700'}`}>
+          {activeView === 'chat' ? chatThreads.length : activeView === 'notes' ? 'Notes' : 'Sandbox'}
         </span>
       </div>
 

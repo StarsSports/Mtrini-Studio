@@ -5,6 +5,7 @@ import ArtifactView from './ArtifactView';
 import { parseMessageArtifacts } from '../utils';
 import NotesView from './NotesView';
 import ChatView from './ChatView';
+import ToolsView from './ToolsView';
 
 interface WorkspaceProps {
   onNewChat: () => void;
@@ -68,6 +69,8 @@ export default function Workspace({
     }`}>
       {activeView === 'notes' ? (
         <NotesView userProfile={userProfile} themeColors={themeColors} darkMode={darkMode} />
+      ) : activeView === 'tools' ? (
+        <ToolsView userProfile={userProfile} themeColors={themeColors} darkMode={darkMode} onOpenPreferences={onOpenPreferences} />
       ) : (
         <div className="flex-1 flex flex-row overflow-hidden h-full w-full relative">
           <ChatView

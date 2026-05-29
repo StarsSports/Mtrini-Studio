@@ -2,12 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Global safety net default-deny
+    // Global safety net: default-deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helper functions
+    // --- REUSABLE SECURITY PRIMITIVES ---
+    
     function isSignedIn() {
       return request.auth != null;
     }
@@ -16,22 +17,121 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Collection matches
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- ENTITY SCHEMA VALIDATORS ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'credits', 'createdAt']) &&
+        data.email is string && data.email.size() <= 200 &&
+        data.credits is int && data.credits >= 0 &&
+        (!data.keys().hasAny(['displayName']) || (data.displayName is string && data.displayName.size() <= 100)) &&
+        (!data.keys().hasAny(['avatarUrl']) || (data.avatarUrl is string && data.avatarUrl.size() <= 500)) &&
+        (!data.keys().hasAny(['themeColor']) || (data.themeColor is string && data.themeColor.size() <= 30)) &&
+        (!data.keys().hasAny(['mcpServer']) || (data.mcpServer is string && data.mcpServer.size() <= 500)) &&
+        (!data.keys().hasAny(['mcpConfig']) || (data.mcpConfig is string && data.mcpConfig.size() <= 100000)) &&
+        (!data.keys().hasAny(['bridgeUrl']) || (data.bridgeUrl is string && data.bridgeUrl.size() <= 500)) &&
+        (!data.keys().hasAny(['isPremiumActive']) || (data.isPremiumActive is bool));
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasAll(['title', 'userId', 'createdAt', 'updatedAt']) &&
+        data.keys().size() == 4 &&
+        data.title is string && data.title.size() <= 150 &&
+        data.userId is string && data.userId == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['role', 'content', 'createdAt']) &&
+        data.role is string && (data.role == 'user' || data.role == 'assistant') &&
+        data.content is string && data.content.size() <= 100000 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidNote(data, userId) {
+      return data.keys().hasAll(['title', 'content', 'userId', 'createdAt', 'updatedAt']) &&
+        data.keys().size() == 5 &&
+        data.title is string && data.title.size() <= 150 &&
+        data.content is string && data.content.size() <= 100000 &&
+        data.userId is string && data.userId == userId &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // --- COLLECTION RESOURCE RULES ---
+
+    // 1. User Profiles Collection
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && 
+        isValidUser(incoming()) && 
+        incoming().createdAt == request.time;
+      allow update: if isOwner(userId) && isValidId(userId) && 
+        isValidUser(incoming()) && 
+        incoming().createdAt == existing().createdAt &&
+        incoming().email == existing().email &&
+        incoming().credits == existing().credits;
     }
 
+    // 2. Project Notes Collection
     match /users/{userId}/notes/{noteId} {
-      allow read, write: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(noteId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidId(noteId) &&
+        isValidNote(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isOwner(userId) && isValidId(userId) && isValidId(noteId) &&
+        isValidNote(incoming(), userId) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isOwner(userId) && isValidId(userId) && isValidId(noteId);
     }
 
+    // 3. Conversation Chat Threads
     match /chats/{chatId} {
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-    }
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid && isValidId(chatId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(chatId) &&
+        isValidChat(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(chatId) &&
+        resource.data.userId == request.auth.uid &&
+        incoming().userId == resource.data.userId &&
+        isValidChat(incoming()) &&
+        incoming().createdAt == resource.data.createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isSignedIn() && isValidId(chatId) && resource.data.userId == request.auth.uid;
 
-    match /chats/{chatId}/messages/{messageId} {
-      allow create, read, delete: if isSignedIn() && get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid;
+      // 4. Sub-collection: Messages within a Chat Thread [Master Gate relational synchronization]
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && 
+          get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid && 
+          isValidId(messageId);
+        allow list: if isSignedIn() && 
+          get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid;
+        allow create: if isSignedIn() && 
+          get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid && 
+          isValidId(messageId) &&
+          isValidMessage(incoming()) &&
+          incoming().createdAt == request.time;
+        allow delete: if isSignedIn() && 
+          get(/databases/$(database)/documents/chats/$(chatId)).data.userId == request.auth.uid && 
+          isValidId(messageId);
+      }
     }
   }
 }

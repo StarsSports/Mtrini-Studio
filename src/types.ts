@@ -9,6 +9,7 @@ export interface UserProfile {
   bridgeUrl?: string;
   isPremiumActive?: boolean;
   mcpConfig?: string;
+  mcpServersJson?: string;
   streamingEnabled?: boolean;
   compilationSpeed?: 'fast' | 'balanced' | 'safe';
   shortcutsEnabled?: boolean;
@@ -18,7 +19,7 @@ export interface UserProfile {
   setupCompleted?: boolean;
 }
 
-export type ViewType = 'chat' | 'notes';
+export type ViewType = 'chat' | 'notes' | 'tools';
 
 export interface ProjectNote {
   id: string;

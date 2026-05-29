@@ -1,0 +1,20 @@
+# Netlify Deployment Configuration for Mtrini Studio Workspace
+# Enables seamless full-stack API proxying to the live Cloud Run backend
+
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+# Redirect all local API fetches directly to the original running Cloud Run backend 
+# to keep code 100% compatible with static, serverless hosts like Netlify.
+[[redirects]]
+  from = "/api/*"
+  to = "https://ais-pre-2lec2iqt6rhwokfedcy24v-429842933088.europe-west2.run.app/api/:splat"
+  status = 200
+  force = true
+
+# Fallback for single page app (SPA) HTML5 router navigation
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
