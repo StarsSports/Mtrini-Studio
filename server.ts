@@ -257,14 +257,19 @@ app.post('/api/mcp/scan', async (req, res) => {
         message: `Successfully connected using JSON Protocol (${detectedMode}). Found ${toolsList.length} tools.`
       });
     } else {
-      throw new Error('No tools could be discovered from standard REST or JSON-RPC endpoints.');
+      throw new Error('No tools could be discovered from standard REST or JSON-RPC endpoints on the target URL (Ensure server is HTTP/JSON-RPC enabled on /tools or /).');
     }
 
   } catch (err: any) {
-    console.warn(`MCP Server probe failed to: ${url}. Falling back to virtual simulation mode.`, err.message);
+    console.warn(`MCP Server probe failed to: ${url}.`, err.message);
+    const isLocalhost = url.includes('localhost') || url.includes('127.0.0.1') || url.includes('0.0.0.0');
+    const advice = isLocalhost 
+      ? 'Because our development app runs in a remote, secure Google Cloud Run container, it cannot pull directly from your private computer\'s "localhost" port unless you bridge it using an ngrok/Cloudflare HTTPS tunnel.' 
+      : 'Verify that the server has CORS enabled for public endpoints, the URL is exact, and correct JSON-RPC handlers are exposed.';
+    
     res.json({
       status: 'error',
-      message: `Failed to ping physical MCP. Initiated Virtual MCP Tunnel.`,
+      message: `Failed to ping remote MCP: ${err.message}. ${advice}`,
       tools: [
         { name: 'mcp_dir_scan', description: 'Scan Workspace Structure (Simulated)', inputSchema: { type: 'object', properties: { path: { type: 'string' } } } },
         { name: 'mcp_file_write', description: 'Write File Context (Simulated)', inputSchema: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } } }
