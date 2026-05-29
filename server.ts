@@ -122,17 +122,17 @@ app.get('/api/download/mtrini', (req, res) => {
   let filePath = '';
 
   if (platform === 'windows') {
-    fileName = 'Mtrini_Desktop_1.1.exe';
-    filePath = path.join(process.cwd(), 'Mtrini_Desktop_1.1.exe');
+    fileName = 'Mtrini_Desktop_1.1.zip';
+    filePath = path.join(process.cwd(), 'Mtrini_Desktop_1.1.zip');
   } else if (platform === 'mac-silicon') {
-    fileName = 'Mtrini_Mac_Silicon';
-    filePath = path.join(process.cwd(), 'Mtrini_Mac_Silicon');
+    fileName = 'Mtrini_Mac_Silicon.zip';
+    filePath = path.join(process.cwd(), 'Mtrini_Mac_Silicon.zip');
   } else if (platform === 'mac-intel') {
-    fileName = 'Mtrini_Mac_Intel';
-    filePath = path.join(process.cwd(), 'Mtrini_Mac_Intel');
+    fileName = 'Mtrini_Mac_Intel.zip';
+    filePath = path.join(process.cwd(), 'Mtrini_Mac_Intel.zip');
   } else {
-    fileName = 'Mtrini_Desktop_1.1.exe';
-    filePath = path.join(process.cwd(), 'Mtrini_Desktop_1.1.exe');
+    fileName = 'Mtrini_Desktop_1.1.zip';
+    filePath = path.join(process.cwd(), 'Mtrini_Desktop_1.1.zip');
   }
 
   if (fs.existsSync(filePath)) {

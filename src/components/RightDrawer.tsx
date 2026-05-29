@@ -987,15 +987,88 @@ end`;
                 </div>
               )}
 
-              {/* Netlify deployment compat box */}
-              <div className="bg-[#0f2422]/20 rounded-xl p-2.5 border border-[#144d41]/30 leading-normal text-[9px] text-[#2dd4bf]/90 select-none">
-                <span className="font-bold flex items-center gap-1">
-                  🌐 Netlify Support Active
-                </span>
-                <span className="block mt-0.5 text-neutral-500 font-sans tracking-tight">
-                  Our `netlify.toml` automatically establishes local redirection. No CORS blocking or tunnel proxy issues detected.
-                </span>
-              </div>
+              {/* Native Local Network Connection Detector */}
+              {(() => {
+                const isLocalhostApp = typeof window !== 'undefined' && 
+                  (window.location.hostname === 'localhost' || 
+                   window.location.hostname === '127.0.0.1' || 
+                   window.location.hostname.startsWith('192.168.'));
+
+                if (isLocalhostApp) {
+                  return (
+                    <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20 text-emerald-400 select-none text-[10px]">
+                      <span className="font-extrabold flex items-center gap-1.5 uppercase tracking-wide">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+                        🟢 Native Desktop Mode Active
+                      </span>
+                      <span className="block mt-1.5 text-neutral-450 leading-relaxed font-sans">
+                        Running locally on this computer. Your requests can pair with any <strong>direct local backend servers</strong> (e.g. <code className="bg-black/35 px-1 py-0.5 rounded text-emerald-350">http://localhost:8000</code>) straight through this client safely!
+                      </span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/15 text-amber-500 select-none text-[10px] space-y-2">
+                    <span className="font-extrabold flex items-center gap-1.5 uppercase tracking-wider">
+                      🌐 Cloud Sandboxed Preview Mode
+                    </span>
+                    <p className="text-neutral-400 leading-normal font-sans">
+                      Because this live preview is hosted remotely on Google Cloud Run, it can't reach address <code>localhost</code> inside your house directly without a proxy tunnel.
+                    </p>
+                    
+                    {/* Native Desktop Executable Downloads */}
+                    <div className="pt-2 border-t border-amber-500/10 space-y-2">
+                      <span className="font-extrabold text-[9px] uppercase tracking-wide text-amber-400 block">📥 Download Native 1-Click Desktop App:</span>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        <a 
+                          href="/api/download/mtrini?platform=windows" 
+                          className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/20 hover:border-amber-500/45 rounded-lg text-amber-350 font-bold transition text-[9px]"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                            Windows App (.zip)
+                          </span>
+                          <span className="bg-black/35 px-1 py-0.5 rounded text-[8px] font-mono text-amber-350 whitespace-nowrap">Win 10/11</span>
+                        </a>
+                        <a 
+                          href="/api/download/mtrini?platform=mac-silicon" 
+                          className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/20 hover:border-amber-500/45 rounded-lg text-amber-350 font-bold transition text-[9px]"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                            macOS Apple Silicon (.zip)
+                          </span>
+                          <span className="bg-black/35 px-1 py-0.5 rounded text-[8px] font-mono text-amber-350 whitespace-nowrap">Mac Arm64</span>
+                        </a>
+                        <a 
+                          href="/api/download/mtrini?platform=mac-intel" 
+                          className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-neutral-800/40 hover:bg-neutral-800/70 border border-neutral-700/30 hover:border-neutral-700/60 rounded-lg text-neutral-400 font-bold transition text-[9px]"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Terminal className="w-3.5 h-3.5 text-neutral-500" />
+                            macOS Old Intel Wrapper (.zip)
+                          </span>
+                          <span className="bg-black/35 px-1 py-0.5 rounded text-[8px] font-mono text-neutral-500 whitespace-nowrap">Mac x64</span>
+                        </a>
+                      </div>
+                      <p className="text-[8px] text-neutral-500 leading-normal font-sans select-text">
+                        Extract the ZIP archive and double-click the launcher to open Mtrini Studio in your browser, enabling <strong>instant direct local connections with local MCP tools and servers!</strong>
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-amber-500/10 space-y-1.5 text-left">
+                      <span className="font-extrabold text-[9px] uppercase tracking-wide text-neutral-300 block">⚡ Alternative: Boot Entirely Locally via Node:</span>
+                      <ol className="list-decimal pl-4 text-neutral-400 text-[9px] space-y-1 font-sans">
+                        <li>Download or export this project folder as a ZIP file.</li>
+                        <li>Open your terminal in this directory and run <code className="bg-black/45 px-1 py-0.5 text-amber-300 rounded font-mono">npm install</code>.</li>
+                        <li>Add your <code className="bg-black/45 px-1 py-0.5 text-amber-300 rounded font-mono">GEMINI_API_KEY</code> environment variable.</li>
+                        <li>Type <code className="bg-black/45 px-1 py-0.5 text-amber-300 rounded font-mono font-bold">npm run dev</code> to boot up on <code className="text-amber-300 font-mono">localhost:3000</code>.</li>
+                      </ol>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Roblox Command Sync poller */}
