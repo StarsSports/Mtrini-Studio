@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import * as archiverModule from 'archiver';
 
 dotenv.config();
 
@@ -118,35 +119,71 @@ app.get('/api/download/mtrini', (req, res) => {
     }
   }
 
-  let fileName = '';
-  let filePath = '';
+  let folderParent = '';
+  let folderKey = '';
+  let downloadFileName = '';
 
   if (platform === 'windows') {
-    fileName = 'Mtrini_Desktop_1.1.zip';
-    filePath = path.join(process.cwd(), 'Mtrini_Desktop_1.1.zip');
+    folderParent = 'dist-desktop/win';
+    folderKey = 'Mtrini-win32-x64';
+    downloadFileName = 'Mtrini_Desktop_1.1.zip';
   } else if (platform === 'mac-silicon') {
-    fileName = 'Mtrini_Mac_Silicon.zip';
-    filePath = path.join(process.cwd(), 'Mtrini_Mac_Silicon.zip');
+    folderParent = 'dist-desktop/mac-silicon';
+    folderKey = 'Mtrini-darwin-arm64';
+    downloadFileName = 'Mtrini_Mac_Silicon.zip';
   } else if (platform === 'mac-intel') {
-    fileName = 'Mtrini_Mac_Intel.zip';
-    filePath = path.join(process.cwd(), 'Mtrini_Mac_Intel.zip');
+    folderParent = 'dist-desktop/mac-intel';
+    folderKey = 'Mtrini-darwin-x64';
+    downloadFileName = 'Mtrini_Mac_Intel.zip';
   } else {
-    fileName = 'Mtrini_Desktop_1.1.zip';
-    filePath = path.join(process.cwd(), 'Mtrini_Desktop_1.1.zip');
+    folderParent = 'dist-desktop/win';
+    folderKey = 'Mtrini-win32-x64';
+    downloadFileName = 'Mtrini_Desktop_1.1.zip';
   }
 
-  if (fs.existsSync(filePath)) {
-    res.download(filePath, fileName, (err) => {
-      if (err) {
-        console.error(`Failed to download file ${fileName}:`, err);
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'File transfer failed.' });
-        }
-      }
-    });
-  } else {
-    res.status(404).json({ error: `Pre-compiled binary for platform "${platform}" was not found on the server.` });
+  const fullParentPath = path.join(process.cwd(), folderParent);
+
+  if (!fs.existsSync(fullParentPath)) {
+    return res.status(404).json({ error: `Compiled binary directory for platform "${platform}" not found on the server.` });
   }
+
+  const subFolders = fs.readdirSync(fullParentPath);
+  const targetFolder = subFolders.find(f => f.toLowerCase().startsWith('mtrini') || f === folderKey);
+
+  if (!targetFolder) {
+    return res.status(404).json({ error: `Compiled folder for platform "${platform}" not found under ${folderParent}.` });
+  }
+
+  const fullSourcePath = path.join(fullParentPath, targetFolder);
+
+  console.info(`[Streaming ZIP] Initiating on-the-fly streaming download for platform "${platform}" from "${fullSourcePath}" to filename "${downloadFileName}"...`);
+
+  // Set response headers for direct, streaming zip file download
+  res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
+  res.setHeader('Content-Type', 'application/zip');
+
+  const { ZipArchive } = archiverModule;
+  const archive = new ZipArchive({ zlib: { level: 2 } });
+
+  archive.on('error', (err) => {
+    console.error(`[Streaming ZIP Error] Failed to compress folder ${fullSourcePath}:`, err);
+    if (!res.headersSent) {
+      res.status(500).end('Compression error occurred.');
+    }
+  });
+
+  // Handle client socket termination gracefully (EPIPE, ECONNRESET, etc)
+  req.on('close', () => {
+    console.info(`[Info] On-the-fly streaming of ${downloadFileName} was closed/canceled by the client.`);
+    archive.destroy();
+  });
+
+  // Pipe archive output into express response
+  archive.pipe(res);
+  // Pack files at the clean root level of the ZIP
+  archive.directory(fullSourcePath, false);
+  // Finalize (trigger stream output)
+  archive.finalize();
 });
 
 // API Route: MCP Scan and Probe
@@ -765,6 +802,109 @@ function styleParam(style: string, premium: boolean): number {
   return premium ? 0.8 : 0.6;        // standard flash parameters
 }
 
+function openBrowser(url: string) {
+  const os = require('os');
+  const path = require('path');
+  const fs = require('fs');
+  const { exec } = require('child_process');
+  let cmd = '';
+  const platform = os.platform();
+
+  if (platform === 'win32') {
+    // Try to launch Chrome or Edge in --app (Application Mode)
+    const chromePaths = [
+      path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Google\\Chrome\\Application\\chrome.exe'),
+      path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Google\\Chrome\\Application\\chrome.exe'),
+      path.join(process.env['LocalAppData'] || '', 'Google\\Chrome\\Application\\chrome.exe')
+    ];
+    
+    const edgePaths = [
+      path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Microsoft\\Edge\\Application\\msedge.exe'),
+      path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Microsoft\\Edge\\Application\\msedge.exe')
+    ];
+
+    let appPath = '';
+    for (const p of chromePaths) {
+      if (fs.existsSync(p)) {
+        appPath = p;
+        break;
+      }
+    }
+    if (!appPath) {
+      for (const p of edgePaths) {
+        if (fs.existsSync(p)) {
+          appPath = p;
+          break;
+        }
+      }
+    }
+
+    if (appPath) {
+      cmd = `"${appPath}" --app="${url}"`;
+      console.log("[✔] Launcher found browser environment. Opening in Standalone Native Windows App container...");
+    } else {
+      cmd = `start "" "${url}"`;
+      console.log("[!] Native wrapper client not found. Falling back to default browser...");
+    }
+  } else if (platform === 'darwin') {
+    const chromeMacPath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    if (fs.existsSync(chromeMacPath)) {
+      cmd = `"${chromeMacPath}" --app="${url}"`;
+      console.log("[✔] Google Chrome found on macOS. Launching in Native Sandbox...");
+    } else {
+      cmd = `open "${url}"`;
+      console.log("[!] Chrome not found. Launching Safari default web container...");
+    }
+  } else {
+    cmd = `xdg-open "${url}"`;
+  }
+
+  exec(cmd, (err: any) => {
+    if (err) {
+      console.log(`[Launch Alert] Please open this address manually: ${url}`);
+      if (platform === 'win32') exec(`start "" "${url}"`);
+      if (platform === 'darwin') exec(`open "${url}"`);
+    } else {
+      console.log(`[★] Native application view launched successfully!`);
+    }
+  });
+}
+
+function tryListen(app: any, startPort: number) {
+  const serverListener = app.listen(startPort, '0.0.0.0', () => {
+    const localUrl = `http://localhost:${startPort}`;
+    
+    // Save port globally for Electron integration
+    (global as any).mtriniPort = startPort;
+    
+    console.log('\n==============================================================');
+    console.log('                        MTRINI DESKTOP                        ');
+    console.log('                  Running completely locally on your PC       ');
+    console.log('==============================================================');
+    console.log(`\n[★] Local server running at: ${localUrl}`);
+    console.log('[★] All web/chat features and local MCP integrations is active!');
+    console.log('\nKeep this window open. Press Ctrl+C to close.');
+    
+    const isCloudRun = !!process.env.K_SERVICE;
+    const isPackaged = !!(process as any).pkg;
+    const isElectron = process.env.MTRINI_ELECTRON === 'true';
+    if (!isElectron && (isPackaged || !isCloudRun)) {
+      setTimeout(() => {
+        openBrowser(localUrl);
+      }, 1000);
+    }
+  });
+
+  serverListener.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`[Mtrini Server] Port ${startPort} already in use, trying ${startPort + 1}...`);
+      tryListen(app, startPort + 1);
+    } else {
+      console.error('[Mtrini Server] Server error:', err);
+    }
+  });
+}
+
 // Serve frontend assets
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -774,17 +914,21 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[Mtrini Server] Listening on http://0.0.0.0:${PORT}`);
+    });
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    let distPath = __dirname;
+    if (!fs.existsSync(path.join(distPath, 'index.html'))) {
+      distPath = path.join(process.cwd(), 'dist');
+    }
+    console.log(`[Mtrini Server] Serving static web client from: ${distPath}`);
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
+    tryListen(app, PORT);
   }
-
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Mtrini Server] Listening on http://0.0.0.0:${PORT}`);
-  });
 }
 
 startServer();

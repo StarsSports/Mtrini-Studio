@@ -1019,10 +1019,19 @@ end`;
                     
                     {/* Native Desktop Executable Downloads */}
                     <div className="pt-2 border-t border-amber-500/10 space-y-2">
-                      <span className="font-extrabold text-[9px] uppercase tracking-wide text-amber-400 block">📥 Download Native 1-Click Desktop App:</span>
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-[9px] uppercase tracking-wide text-amber-400 block">📥 Download Native 1-Click Desktop App:</span>
+                      </div>
+                      
+                      <div className="bg-amber-500/5 rounded-lg p-2 border border-amber-500/10 text-[9px] text-amber-500/80 leading-snug font-sans">
+                        ⚠️ <strong>Tip:</strong> If your browser blocks downloading inside the preview pane, click the <strong className="text-amber-400">"Open in New Tab"</strong> button (icon at the top right of this preview), then download flawlessly in 1 click!
+                      </div>
+
                       <div className="grid grid-cols-1 gap-1.5">
                         <a 
                           href="/api/download/mtrini?platform=windows" 
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/20 hover:border-amber-500/45 rounded-lg text-amber-350 font-bold transition text-[9px]"
                         >
                           <span className="flex items-center gap-1.5">
@@ -1033,6 +1042,8 @@ end`;
                         </a>
                         <a 
                           href="/api/download/mtrini?platform=mac-silicon" 
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/20 hover:border-amber-500/45 rounded-lg text-amber-350 font-bold transition text-[9px]"
                         >
                           <span className="flex items-center gap-1.5">
@@ -1043,6 +1054,8 @@ end`;
                         </a>
                         <a 
                           href="/api/download/mtrini?platform=mac-intel" 
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-neutral-800/40 hover:bg-neutral-800/70 border border-neutral-700/30 hover:border-neutral-700/60 rounded-lg text-neutral-400 font-bold transition text-[9px]"
                         >
                           <span className="flex items-center gap-1.5">

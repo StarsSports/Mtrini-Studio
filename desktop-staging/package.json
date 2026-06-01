@@ -1,0 +1,4 @@
+{
+  "name": "mtrini",
+  "main": "electron-main.cjs"
+}
